@@ -421,3 +421,27 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   margin: 14px 0;
   font-size: 15px;
 }
+.cancel-timer {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--turmeric-deep);
+  margin-top: 18px;
+}
+
+.cancel-order-btn {
+  background: transparent;
+  border: 1.5px solid var(--danger);
+  color: var(--danger);
+  padding: 10px 22px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 14px;
+  margin-top: 10px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.cancel-order-btn:hover {
+  background: var(--danger);
+  color: white;
+}
