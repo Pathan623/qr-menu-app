@@ -2,21 +2,30 @@
 import { useParams } from 'react-router-dom'
 import { supabase, RESTAURANT_NAME } from '../supabaseClient'
 
+const CANCEL_WINDOW_SECONDS = 120
+
+// Supabase timestamps sometimes come without a timezone suffix.
+// Treat them as UTC explicitly so the countdown works correctly for all users.
+function parseAsUtc(ts) {
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts)
+  return new Date(ts + 'Z')
+}
+
 const STATUS_TEXT = {
-  pending: { label: 'Order Accepted', desc: 'Kitchen will start preparing shortly.' },
-  preparing: { label: 'Getting Prepared', desc: 'Your food is being cooked right now.' },
-  served: { label: 'Served', desc: 'Enjoy your meal!' },
+  pending: { label: 'Order Accepted', desc: 'Kitchen will start preparing shortly.', icon: '\ud83d\udfe1' },
+  preparing: { label: 'Getting Prepared', desc: 'Your food is being cooked right now.', icon: '\ud83d\udc68\u200d\ud83c\udf73' },
+  served: { label: 'Served', desc: 'Enjoy your meal!', icon: '\u2705' },
+  cancelled: { label: 'Order Cancelled', desc: 'This order was cancelled.', icon: '\u274c' },
 }
 
 export default function CustomerMenu() {
   const { tableNumber } = useParams()
-  const storageKey = `qr_active_order_table_${tableNumber}`
-
   const [items, setItems] = useState([])
   const [cart, setCart] = useState({})
   const [loading, setLoading] = useState(true)
   const [placing, setPlacing] = useState(false)
   const [activeOrder, setActiveOrder] = useState(null)
+  const [secondsLeft, setSecondsLeft] = useState(0)
 
   useEffect(() => {
     async function loadMenu() {
@@ -33,26 +42,6 @@ export default function CustomerMenu() {
     loadMenu()
   }, [])
 
-  // on load: check if this table has a saved order id, and if so, fetch its latest status
-  useEffect(() => {
-    const savedId = localStorage.getItem(storageKey)
-    if (!savedId) return
-
-    supabase
-      .from('orders')
-      .select('*')
-      .eq('id', savedId)
-      .single()
-      .then(({ data, error }) => {
-        if (!error && data) {
-          setActiveOrder(data)
-        } else {
-          localStorage.removeItem(storageKey)
-        }
-      })
-  }, [tableNumber])
-
-  // live status listener
   useEffect(() => {
     if (!activeOrder) return
     const channel = supabase
@@ -66,6 +55,20 @@ export default function CustomerMenu() {
 
     return () => supabase.removeChannel(channel)
   }, [activeOrder?.id])
+
+  useEffect(() => {
+    if (!activeOrder || activeOrder.status !== 'pending') return
+
+    function tick() {
+      const elapsed = (Date.now() - parseAsUtc(activeOrder.created_at).getTime()) / 1000
+      const remaining = Math.max(0, Math.round(CANCEL_WINDOW_SECONDS - elapsed))
+      setSecondsLeft(remaining)
+    }
+
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => clearInterval(interval)
+  }, [activeOrder])
 
   function changeQty(id, delta) {
     setCart((prev) => {
@@ -105,30 +108,46 @@ export default function CustomerMenu() {
     setPlacing(false)
     if (!error) {
       setActiveOrder(data)
-      localStorage.setItem(storageKey, data.id)
       setCart({})
     } else {
       alert('Could not place order, please try again or call staff.')
     }
   }
 
-  function orderMore() {
-    localStorage.removeItem(storageKey)
-    setActiveOrder(null)
+  async function cancelOrder() {
+    if (!activeOrder) return
+    const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', activeOrder.id)
+    if (!error) setActiveOrder({ ...activeOrder, status: 'cancelled' })
   }
 
   if (activeOrder) {
     const st = STATUS_TEXT[activeOrder.status] || STATUS_TEXT.pending
+    const canCancel = activeOrder.status === 'pending' && secondsLeft > 0
+    const mins = Math.floor(secondsLeft / 60)
+    const secs = secondsLeft % 60
+
     return (
       <div className="menu-page">
         <div className="order-confirm">
-          <h2>{st.label}</h2>
+          <h2>{st.icon} {st.label}</h2>
           <div className="ticket-num">
-            Order #{activeOrder.id.slice(0, 8).toUpperCase()} - Table {tableNumber}
+            Order #{activeOrder.id.slice(0, 8).toUpperCase()} \u00b7 Table {tableNumber}
           </div>
           <p style={{ marginTop: 24 }}>{st.desc}</p>
-          {activeOrder.status === 'served' && (
-            <button className="place-order-btn" style={{ marginTop: 20 }} onClick={orderMore}>
+
+          {canCancel && (
+            <>
+              <div className="cancel-timer">
+                You can cancel this order for {mins}:{secs.toString().padStart(2, '0')} more
+              </div>
+              <button className="cancel-order-btn" onClick={cancelOrder}>
+                Cancel Order
+              </button>
+            </>
+          )}
+
+          {(activeOrder.status === 'served' || activeOrder.status === 'cancelled') && (
+            <button className="place-order-btn" style={{ marginTop: 20 }} onClick={() => setActiveOrder(null)}>
               Order more
             </button>
           )}
@@ -160,12 +179,12 @@ export default function CustomerMenu() {
               <div className="menu-item" key={item.id}>
                 <div>
                   <div className="menu-item-name">{item.name}</div>
-                  <div className="menu-item-price">Rs{item.price}</div>
+                  <div className="menu-item-price">\u20b9{item.price}</div>
                 </div>
                 <div className="qty-control">
                   {cart[item.id] ? (
                     <>
-                      <button className="qty-btn" onClick={() => changeQty(item.id, -1)}>-</button>
+                      <button className="qty-btn" onClick={() => changeQty(item.id, -1)}>\u2212</button>
                       <span className="qty-num">{cart[item.id]}</span>
                       <button className="qty-btn" onClick={() => changeQty(item.id, 1)}>+</button>
                     </>
@@ -182,7 +201,7 @@ export default function CustomerMenu() {
         <div className="cart-bar">
           <div>
             <div className="cart-bar-info">{cartCount} item{cartCount > 1 ? 's' : ''}</div>
-            <div className="cart-bar-total">Rs{cartTotal}</div>
+            <div className="cart-bar-total">\u20b9{cartTotal}</div>
           </div>
           <button className="place-order-btn" disabled={placing} onClick={placeOrder}>
             {placing ? 'Placing...' : 'Place Order'}
@@ -192,5 +211,3 @@ export default function CustomerMenu() {
     </div>
   )
 }
-
-
