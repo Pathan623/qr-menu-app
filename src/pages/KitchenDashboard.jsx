@@ -1,0 +1,95 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../supabaseClient'
+
+export default function KitchenDashboard() {
+  const [orders, setOrders] = useState([])
+
+  useEffect(() => {
+    loadOrders()
+
+    const channel = supabase
+      .channel('orders-live')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => loadOrders()
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [])
+
+  async function loadOrders() {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .neq('status', 'served')
+      .order('created_at', { ascending: true })
+
+    if (!error) setOrders(data || [])
+  }
+
+  async function updateStatus(id, status) {
+    await supabase.from('orders').update({ status }).eq('id', id)
+  }
+
+  function timeAgo(ts) {
+    const mins = Math.floor((Date.now() - new Date(ts).getTime()) / 60000)
+    if (mins < 1) return 'just now'
+    return `${mins} min ago`
+  }
+
+  return (
+    <div className="kitchen-page">
+      <div className="kitchen-topbar">
+        <h1><span className="live-dot" />Kitchen Orders</h1>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, opacity: 0.7 }}>
+          {orders.length} active
+        </div>
+      </div>
+
+      {orders.length === 0 && (
+        <div className="empty-state">No active orders — waiting for tables to order…</div>
+      )}
+
+      <div className="ticket-grid">
+        {orders.map((order) => (
+          <div className="ticket" key={order.id}>
+            <div className="ticket-perf" />
+            <div className="ticket-head">
+              <div className="ticket-table">TABLE {order.table_number}</div>
+              <div className="ticket-time">{timeAgo(order.created_at)}</div>
+            </div>
+            <div className="ticket-body">
+              <span className={`status-pill ${order.status}`}>{order.status.toUpperCase()}</span>
+              <div style={{ marginTop: 10 }}>
+                {order.items.map((it, idx) => (
+                  <div className="ticket-line" key={idx}>
+                    <span>{it.qty}× {it.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="ticket-actions">
+              {order.status === 'pending' && (
+                <button className="prep" onClick={() => updateStatus(order.id, 'preparing')}>
+                  START PREPARING
+                </button>
+              )}
+              {order.status === 'preparing' && (
+                <button className="done" onClick={() => updateStatus(order.id, 'served')}>
+                  MARK SERVED
+                </button>
+              )}
+              {order.status === 'pending' && (
+                <button className="done" onClick={() => updateStatus(order.id, 'served')}>
+                  MARK SERVED
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
