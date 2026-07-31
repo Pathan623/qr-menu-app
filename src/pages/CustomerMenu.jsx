@@ -10,6 +10,8 @@ const STATUS_TEXT = {
 
 export default function CustomerMenu() {
   const { tableNumber } = useParams()
+  const storageKey = `qr_active_order_table_${tableNumber}`
+
   const [items, setItems] = useState([])
   const [cart, setCart] = useState({})
   const [loading, setLoading] = useState(true)
@@ -31,6 +33,26 @@ export default function CustomerMenu() {
     loadMenu()
   }, [])
 
+  // on load: check if this table has a saved order id, and if so, fetch its latest status
+  useEffect(() => {
+    const savedId = localStorage.getItem(storageKey)
+    if (!savedId) return
+
+    supabase
+      .from('orders')
+      .select('*')
+      .eq('id', savedId)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setActiveOrder(data)
+        } else {
+          localStorage.removeItem(storageKey)
+        }
+      })
+  }, [tableNumber])
+
+  // live status listener
   useEffect(() => {
     if (!activeOrder) return
     const channel = supabase
@@ -83,10 +105,16 @@ export default function CustomerMenu() {
     setPlacing(false)
     if (!error) {
       setActiveOrder(data)
+      localStorage.setItem(storageKey, data.id)
       setCart({})
     } else {
       alert('Could not place order, please try again or call staff.')
     }
+  }
+
+  function orderMore() {
+    localStorage.removeItem(storageKey)
+    setActiveOrder(null)
   }
 
   if (activeOrder) {
@@ -100,7 +128,7 @@ export default function CustomerMenu() {
           </div>
           <p style={{ marginTop: 24 }}>{st.desc}</p>
           {activeOrder.status === 'served' && (
-            <button className="place-order-btn" style={{ marginTop: 20 }} onClick={() => setActiveOrder(null)}>
+            <button className="place-order-btn" style={{ marginTop: 20 }} onClick={orderMore}>
               Order more
             </button>
           )}
