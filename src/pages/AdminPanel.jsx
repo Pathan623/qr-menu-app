@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import { Link } from 'react-router-dom'
 import { supabase, RESTAURANT_NAME } from '../supabaseClient'
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'changeme'
@@ -35,10 +36,51 @@ export default function AdminPanel() {
 
   return (
     <div className="admin-page">
-      <h1>{RESTAURANT_NAME}</h1>
-      <div className="admin-sub">Menu &amp; table management</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1>{RESTAURANT_NAME}</h1>
+          <div className="admin-sub">Menu &amp; table management</div>
+        </div>
+        <Link to="/kitchen">
+          <button className="admin-btn">Go to Kitchen</button>
+        </Link>
+      </div>
+      <RestaurantSettings />
       <MenuManager />
       <TableManager />
+    </div>
+  )
+}
+
+function RestaurantSettings() {
+  const [name, setName] = useState('')
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    supabase.from('restaurant_settings').select('*').eq('id', 1).single()
+      .then(({ data }) => {
+        setName(data?.name || RESTAURANT_NAME)
+        setLoaded(true)
+      })
+  }, [])
+
+  async function save() {
+    const { error } = await supabase
+      .from('restaurant_settings')
+      .upsert({ id: 1, name })
+    if (!error) alert('Saved! Refresh menu/kitchen pages to see the new name.')
+    else alert('Could not save, please try again.')
+  }
+
+  if (!loaded) return null
+
+  return (
+    <div className="admin-section">
+      <h2>Restaurant name</h2>
+      <div className="admin-row">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Restaurant name" />
+        <button className="admin-btn" onClick={save}>Save</button>
+      </div>
     </div>
   )
 }
@@ -85,7 +127,7 @@ function MenuManager() {
       <h2>Menu items</h2>
       <div className="admin-row">
         <input placeholder="Item name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input placeholder="Price (₹)" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+        <input placeholder="Price (Rs)" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
         <input placeholder="Category (e.g. Starters)" value={category} onChange={(e) => setCategory(e.target.value)} />
         <button className="admin-btn" onClick={addItem}>Add item</button>
       </div>
@@ -93,7 +135,7 @@ function MenuManager() {
       {items.map((item) => (
         <div className="admin-list-item" key={item.id}>
           <span style={{ opacity: item.available ? 1 : 0.4 }}>
-            {item.name} — ₹{item.price} <em style={{ opacity: 0.6 }}>({item.category})</em>
+            {item.name} - Rs{item.price} <em style={{ opacity: 0.6 }}>({item.category})</em>
           </span>
           <span>
             <button

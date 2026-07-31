@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
 export default function KitchenDashboard() {
   const [orders, setOrders] = useState([])
+  const [soundEnabled, setSoundEnabled] = useState(false)
+  const audioCtxRef = useRef(null)
 
   useEffect(() => {
     loadOrders()
@@ -11,13 +13,56 @@ export default function KitchenDashboard() {
       .channel('orders-live')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
+        { event: 'INSERT', schema: 'public', table: 'orders' },
+        () => {
+          loadOrders()
+          playBeep()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders' },
         () => loadOrders()
       )
       .subscribe()
 
     return () => supabase.removeChannel(channel)
   }, [])
+
+  function enableSound() {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    audioCtxRef.current = ctx
+    setSoundEnabled(true)
+  }
+
+  function playBeep() {
+    const ctx = audioCtxRef.current
+    if (!ctx) return
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.type = 'sine'
+    osc.frequency.value = 880
+    gain.gain.setValueAtTime(0.001, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start()
+    osc.stop(ctx.currentTime + 0.5)
+    setTimeout(() => {
+      const osc2 = ctx.createOscillator()
+      const gain2 = ctx.createGain()
+      osc2.type = 'sine'
+      osc2.frequency.value = 1046
+      gain2.gain.setValueAtTime(0.001, ctx.currentTime)
+      gain2.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02)
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+      osc2.connect(gain2)
+      gain2.connect(ctx.destination)
+      osc2.start()
+      osc2.stop(ctx.currentTime + 0.4)
+    }, 250)
+  }
 
   async function loadOrders() {
     const { data, error } = await supabase
@@ -43,13 +88,18 @@ export default function KitchenDashboard() {
     <div className="kitchen-page">
       <div className="kitchen-topbar">
         <h1><span className="live-dot" />Kitchen Orders</h1>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, opacity: 0.7 }}>
-          {orders.length} active
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {!soundEnabled && (
+            <button className="admin-btn" onClick={enableSound}>Enable Sound</button>
+          )}
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, opacity: 0.7, color: 'var(--ticket)' }}>
+            {orders.length} active
+          </div>
         </div>
       </div>
 
       {orders.length === 0 && (
-        <div className="empty-state">No active orders — waiting for tables to order…</div>
+        <div className="empty-state">No active orders - waiting for tables to order...</div>
       )}
 
       <div className="ticket-grid">
@@ -65,7 +115,7 @@ export default function KitchenDashboard() {
               <div style={{ marginTop: 10 }}>
                 {order.items.map((it, idx) => (
                   <div className="ticket-line" key={idx}>
-                    <span>{it.qty}× {it.name}</span>
+                    <span>{it.qty}x {it.name}</span>
                   </div>
                 ))}
               </div>

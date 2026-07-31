@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase, RESTAURANT_NAME } from '../supabaseClient'
+
+const STATUS_TEXT = {
+  pending: { label: 'Order Accepted', desc: 'Kitchen will start preparing shortly.' },
+  preparing: { label: 'Getting Prepared', desc: 'Your food is being cooked right now.' },
+  served: { label: 'Served', desc: 'Enjoy your meal!' },
+}
 
 export default function CustomerMenu() {
   const { tableNumber } = useParams()
@@ -8,7 +14,7 @@ export default function CustomerMenu() {
   const [cart, setCart] = useState({})
   const [loading, setLoading] = useState(true)
   const [placing, setPlacing] = useState(false)
-  const [placedOrderId, setPlacedOrderId] = useState(null)
+  const [activeOrder, setActiveOrder] = useState(null)
 
   useEffect(() => {
     async function loadMenu() {
@@ -24,6 +30,20 @@ export default function CustomerMenu() {
     }
     loadMenu()
   }, [])
+
+  useEffect(() => {
+    if (!activeOrder) return
+    const channel = supabase
+      .channel(`order-${activeOrder.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${activeOrder.id}` },
+        (payload) => setActiveOrder(payload.new)
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+  }, [activeOrder?.id])
 
   function changeQty(id, delta) {
     setCart((prev) => {
@@ -62,23 +82,28 @@ export default function CustomerMenu() {
 
     setPlacing(false)
     if (!error) {
-      setPlacedOrderId(data.id.slice(0, 8).toUpperCase())
+      setActiveOrder(data)
       setCart({})
     } else {
       alert('Could not place order, please try again or call staff.')
     }
   }
 
-  if (placedOrderId) {
+  if (activeOrder) {
+    const st = STATUS_TEXT[activeOrder.status] || STATUS_TEXT.pending
     return (
       <div className="menu-page">
         <div className="order-confirm">
-          <h2>Order sent to kitchen 🍳</h2>
-          <div className="ticket-num">Order #{placedOrderId} · Table {tableNumber}</div>
-          <p style={{ marginTop: 24 }}>Your food is being prepared.</p>
-          <button className="place-order-btn" style={{ marginTop: 20 }} onClick={() => setPlacedOrderId(null)}>
-            Order more
-          </button>
+          <h2>{st.label}</h2>
+          <div className="ticket-num">
+            Order #{activeOrder.id.slice(0, 8).toUpperCase()} - Table {tableNumber}
+          </div>
+          <p style={{ marginTop: 24 }}>{st.desc}</p>
+          {activeOrder.status === 'served' && (
+            <button className="place-order-btn" style={{ marginTop: 20 }} onClick={() => setActiveOrder(null)}>
+              Order more
+            </button>
+          )}
         </div>
       </div>
     )
@@ -93,7 +118,7 @@ export default function CustomerMenu() {
         <h1>{RESTAURANT_NAME}</h1>
       </div>
 
-      {loading && <div style={{ padding: 40, textAlign: 'center' }}>Loading menu…</div>}
+      {loading && <div style={{ padding: 40, textAlign: 'center' }}>Loading menu...</div>}
       {!loading && items.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center' }}>Menu is being updated. Please ask staff.</div>
       )}
@@ -107,12 +132,12 @@ export default function CustomerMenu() {
               <div className="menu-item" key={item.id}>
                 <div>
                   <div className="menu-item-name">{item.name}</div>
-                  <div className="menu-item-price">₹{item.price}</div>
+                  <div className="menu-item-price">Rs{item.price}</div>
                 </div>
                 <div className="qty-control">
                   {cart[item.id] ? (
                     <>
-                      <button className="qty-btn" onClick={() => changeQty(item.id, -1)}>−</button>
+                      <button className="qty-btn" onClick={() => changeQty(item.id, -1)}>-</button>
                       <span className="qty-num">{cart[item.id]}</span>
                       <button className="qty-btn" onClick={() => changeQty(item.id, 1)}>+</button>
                     </>
@@ -129,10 +154,10 @@ export default function CustomerMenu() {
         <div className="cart-bar">
           <div>
             <div className="cart-bar-info">{cartCount} item{cartCount > 1 ? 's' : ''}</div>
-            <div className="cart-bar-total">₹{cartTotal}</div>
+            <div className="cart-bar-total">Rs{cartTotal}</div>
           </div>
           <button className="place-order-btn" disabled={placing} onClick={placeOrder}>
-            {placing ? 'Placing…' : 'Place Order'}
+            {placing ? 'Placing...' : 'Place Order'}
           </button>
         </div>
       )}
