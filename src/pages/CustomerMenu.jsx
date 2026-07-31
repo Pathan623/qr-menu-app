@@ -187,6 +187,3 @@ export default function CustomerMenu() {
     </div>
   )
 }
-
-
-
