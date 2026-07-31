@@ -4,8 +4,6 @@ import { supabase, RESTAURANT_NAME } from '../supabaseClient'
 
 const CANCEL_WINDOW_SECONDS = 120
 
-// Supabase timestamps sometimes come without a timezone suffix.
-// Treat them as UTC explicitly so the countdown works correctly for all users.
 function parseAsUtc(ts) {
   if (/Z$|[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts)
   return new Date(ts + 'Z')
@@ -35,7 +33,6 @@ export default function CustomerMenu() {
         .eq('available', true)
         .order('category')
         .order('name')
-
       if (!error) setItems(data || [])
       setLoading(false)
     }
@@ -52,19 +49,16 @@ export default function CustomerMenu() {
         (payload) => setActiveOrder(payload.new)
       )
       .subscribe()
-
     return () => supabase.removeChannel(channel)
   }, [activeOrder?.id])
 
   useEffect(() => {
     if (!activeOrder || activeOrder.status !== 'pending') return
-
     function tick() {
       const elapsed = (Date.now() - parseAsUtc(activeOrder.created_at).getTime()) / 1000
       const remaining = Math.max(0, Math.round(CANCEL_WINDOW_SECONDS - elapsed))
       setSecondsLeft(remaining)
     }
-
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
@@ -93,18 +87,11 @@ export default function CustomerMenu() {
       const item = items.find((i) => i.id === id)
       return { id, name: item.name, price: item.price, qty }
     })
-
     const { data, error } = await supabase
       .from('orders')
-      .insert({
-        table_number: tableNumber,
-        items: orderItems,
-        total: cartTotal,
-        status: 'pending',
-      })
+      .insert({ table_number: tableNumber, items: orderItems, total: cartTotal, status: 'pending' })
       .select()
       .single()
-
     setPlacing(false)
     if (!error) {
       setActiveOrder(data)
@@ -130,22 +117,16 @@ export default function CustomerMenu() {
       <div className="menu-page">
         <div className="order-confirm">
           <h2>{st.icon} {st.label}</h2>
-          <div className="ticket-num">
-            Order #{activeOrder.id.slice(0, 8).toUpperCase()} \u00b7 Table {tableNumber}
-          </div>
+          <div className="ticket-num">Order #{activeOrder.id.slice(0, 8).toUpperCase()} - Table {tableNumber}</div>
           <p style={{ marginTop: 24 }}>{st.desc}</p>
-
           {canCancel && (
             <>
               <div className="cancel-timer">
                 You can cancel this order for {mins}:{secs.toString().padStart(2, '0')} more
               </div>
-              <button className="cancel-order-btn" onClick={cancelOrder}>
-                Cancel Order
-              </button>
+              <button className="cancel-order-btn" onClick={cancelOrder}>Cancel Order</button>
             </>
           )}
-
           {(activeOrder.status === 'served' || activeOrder.status === 'cancelled') && (
             <button className="place-order-btn" style={{ marginTop: 20 }} onClick={() => setActiveOrder(null)}>
               Order more
@@ -164,44 +145,39 @@ export default function CustomerMenu() {
         <div className="table-tag">TABLE {tableNumber}</div>
         <h1>{RESTAURANT_NAME}</h1>
       </div>
-
       {loading && <div style={{ padding: 40, textAlign: 'center' }}>Loading menu...</div>}
       {!loading && items.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center' }}>Menu is being updated. Please ask staff.</div>
       )}
-
       {categories.map((cat) => (
         <div key={cat}>
           <div className="menu-category">{cat}</div>
-          {items
-            .filter((i) => (i.category || 'Menu') === cat)
-            .map((item) => (
-              <div className="menu-item" key={item.id}>
-                <div>
-                  <div className="menu-item-name">{item.name}</div>
-                  <div className="menu-item-price">\u20b9{item.price}</div>
-                </div>
-                <div className="qty-control">
-                  {cart[item.id] ? (
-                    <>
-                      <button className="qty-btn" onClick={() => changeQty(item.id, -1)}>\u2212</button>
-                      <span className="qty-num">{cart[item.id]}</span>
-                      <button className="qty-btn" onClick={() => changeQty(item.id, 1)}>+</button>
-                    </>
-                  ) : (
-                    <button className="qty-btn add" onClick={() => changeQty(item.id, 1)}>Add</button>
-                  )}
-                </div>
+          {items.filter((i) => (i.category || 'Menu') === cat).map((item) => (
+            <div className="menu-item" key={item.id}>
+              <div>
+                <div className="menu-item-name">{item.name}</div>
+                <div className="menu-item-price">Rs{item.price}</div>
               </div>
-            ))}
+              <div className="qty-control">
+                {cart[item.id] ? (
+                  <>
+                    <button className="qty-btn" onClick={() => changeQty(item.id, -1)}>-</button>
+                    <span className="qty-num">{cart[item.id]}</span>
+                    <button className="qty-btn" onClick={() => changeQty(item.id, 1)}>+</button>
+                  </>
+                ) : (
+                  <button className="qty-btn add" onClick={() => changeQty(item.id, 1)}>Add</button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       ))}
-
       {cartCount > 0 && (
         <div className="cart-bar">
           <div>
             <div className="cart-bar-info">{cartCount} item{cartCount > 1 ? 's' : ''}</div>
-            <div className="cart-bar-total">\u20b9{cartTotal}</div>
+            <div className="cart-bar-total">Rs{cartTotal}</div>
           </div>
           <button className="place-order-btn" disabled={placing} onClick={placeOrder}>
             {placing ? 'Placing...' : 'Place Order'}
@@ -211,3 +187,6 @@ export default function CustomerMenu() {
     </div>
   )
 }
+
+
+
