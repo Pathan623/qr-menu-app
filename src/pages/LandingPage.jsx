@@ -2,6 +2,36 @@
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
+const PLANS = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: 800,
+    priceLabel: '10-day free trial, then Rs.800/mo',
+    maxLogins: 1,
+    tableLimit: 10,
+    features: ['1 admin login', 'Up to 10 tables', 'Kitchen dashboard', 'QR code menus'],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 1500,
+    priceLabel: 'Rs.1,500/mo',
+    maxLogins: 3,
+    tableLimit: 20,
+    features: ['3 admin logins', 'Up to 20 tables', 'Kitchen dashboard', 'QR code menus'],
+  },
+  {
+    id: 'unlimited',
+    name: 'Unlimited',
+    price: 2500,
+    priceLabel: 'Rs.2,500/mo',
+    maxLogins: 5,
+    tableLimit: null,
+    features: ['5 admin logins', 'Unlimited tables', 'Kitchen dashboard', 'QR code menus'],
+  },
+]
+
 export default function LandingPage() {
   const [mode, setMode] = useState('existing') // 'existing' | 'new'
 
@@ -95,9 +125,11 @@ function NewRestaurantForm() {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [password, setPassword] = useState('')
-  const [tier, setTier] = useState('starter')
+  const [planId, setPlanId] = useState('starter')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  const selectedPlan = PLANS.find((p) => p.id === planId)
 
   function slugify(text) {
     return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
@@ -112,15 +144,19 @@ function NewRestaurantForm() {
     }
     setSaving(true)
 
-    const maxLogins = tier === 'unlimited' ? 5 : 1
+    const trialEndsAt =
+      planId === 'starter'
+        ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
+        : null
 
     const { error: insertError } = await supabase.from('restaurants').insert({
       slug,
       name,
       admin_password: password,
-      subscription_tier: tier,
-      max_admin_logins: maxLogins,
+      subscription_tier: selectedPlan.id,
+      max_admin_logins: selectedPlan.maxLogins,
       subscription_status: 'trialing',
+      trial_ends_at: trialEndsAt,
     })
 
     setSaving(false)
@@ -159,19 +195,51 @@ function NewRestaurantForm() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
-      <div className="admin-row" style={{ justifyContent: 'center', marginBottom: 14 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-          <input type="radio" checked={tier === 'starter'} onChange={() => setTier('starter')} />
-          Starter (1 login)
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-          <input type="radio" checked={tier === 'unlimited'} onChange={() => setTier('unlimited')} />
-          Unlimited (multi-login)
-        </label>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: 12,
+          margin: '18px 0',
+        }}
+      >
+        {PLANS.map((plan) => {
+          const isSelected = plan.id === planId
+          return (
+            <button
+              type="button"
+              key={plan.id}
+              onClick={() => setPlanId(plan.id)}
+              style={{
+                textAlign: 'left',
+                cursor: 'pointer',
+                borderRadius: 12,
+                padding: '16px 14px',
+                border: isSelected ? '2px solid var(--cardamom, #2f6b4f)' : '1px solid #ddd',
+                background: isSelected ? 'rgba(47, 107, 79, 0.08)' : '#fff',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{plan.name}</div>
+              <div style={{ fontSize: 13, opacity: 0.75, marginBottom: 10 }}>{plan.priceLabel}</div>
+              <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, opacity: 0.85, lineHeight: 1.6 }}>
+                {plan.features.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            </button>
+          )
+        })}
       </div>
+
       {error && <div className="landing-error">{error}</div>}
       <button className="admin-btn" type="submit" disabled={saving} style={{ width: '100%' }}>
-        {saving ? 'Creating...' : 'Create restaurant (30-day free trial)'}
+        {saving
+          ? 'Creating...'
+          : planId === 'starter'
+          ? 'Create restaurant (10-day free trial)'
+          : `Create restaurant (${selectedPlan.priceLabel})`}
       </button>
       {slug && (
         <p style={{ fontSize: 12, opacity: 0.7, marginTop: 10, textAlign: 'center' }}>
