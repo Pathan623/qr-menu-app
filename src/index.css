@@ -564,3 +564,43 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   margin-bottom: 12px;
   text-align: center;
 }
+
+.dashboard-page {
+  max-width: 520px;
+  margin: 80px auto;
+  padding: 0 20px;
+}
+
+.dashboard-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dashboard-card {
+  display: block;
+  text-decoration: none;
+  background: var(--paper-soft);
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 22px 20px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.dashboard-card:hover {
+  border-color: var(--cardamom);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+}
+
+.dashboard-card-title {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.dashboard-card-desc {
+  font-size: 13.5px;
+  color: var(--cardamom-deep);
+}

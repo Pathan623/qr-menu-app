@@ -5,6 +5,7 @@ import CustomerMenu from './pages/CustomerMenu.jsx'
 import KitchenDashboard from './pages/KitchenDashboard.jsx'
 import AdminPanel from './pages/AdminPanel.jsx'
 import LandingPage from './pages/LandingPage.jsx'
+import Dashboard from './pages/Dashboard.jsx'
 import './index.css'
 
 function CustomerMenuWithKey() {
@@ -22,6 +23,11 @@ function AdminWithKey() {
   return <AdminPanel key={adminToken} />
 }
 
+function DashboardWithKey() {
+  const { adminToken } = useParams()
+  return <Dashboard key={adminToken} />
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
@@ -29,6 +35,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/r/:slug/menu/:tableNumber" element={<CustomerMenuWithKey />} />
         <Route path="/kitchen/:adminToken" element={<KitchenWithKey />} />
         <Route path="/admin/:adminToken" element={<AdminWithKey />} />
+        <Route path="/dashboard/:adminToken" element={<DashboardWithKey />} />
         <Route path="*" element={<LandingPage />} />
       </Routes>
     </BrowserRouter>

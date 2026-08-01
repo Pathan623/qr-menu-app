@@ -92,7 +92,7 @@ function ExistingRestaurantForm() {
     }
 
     sessionStorage.setItem(`admin_authed_${data.admin_token}`, '1')
-    navigate(`/admin/${data.admin_token}`)
+    navigate(`/dashboard/${data.admin_token}`)
   }
 
   return (
@@ -171,7 +171,7 @@ function NewRestaurantForm() {
     }
 
     sessionStorage.setItem(`admin_authed_${data.admin_token}`, '1')
-    navigate(`/admin/${data.admin_token}`)
+    navigate(`/dashboard/${data.admin_token}`)
   }
 
   return (
