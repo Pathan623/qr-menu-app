@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
 const CATEGORIES = ['Starters', 'Main Course', 'Desserts', 'Beverages', 'Snacks']
@@ -39,7 +39,7 @@ export default function AdminPanel() {
   if (!authed) {
     return (
       <div className="login-box">
-        <h1 style={{ fontFamily: 'var(--font-display)' }}>{restaurant.name} Admin</h1>
+        <h1 style={{ fontFamily: 'var(--font-display)' }}>Admin Login</h1>
         <input
           type="password"
           placeholder="Admin password"
@@ -72,51 +72,114 @@ export default function AdminPanel() {
   )
 }
 
+function slugify(value) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
 function RestaurantSettings({ restaurant, onUpdated }) {
+  const navigate = useNavigate()
   const [name, setName] = useState(restaurant.name)
+  const [slug, setSlug] = useState(restaurant.slug)
+  const [saving, setSaving] = useState(false)
 
   async function save() {
+    const cleanSlug = slugify(slug)
+    if (!cleanSlug) return alert('Slug cannot be empty')
+
+    setSaving(true)
+    const slugChanged = cleanSlug !== restaurant.slug
+
     const { data, error } = await supabase
       .from('restaurants')
-      .update({ name })
+      .update({ name, slug: cleanSlug })
       .eq('id', restaurant.id)
       .select()
       .single()
-    if (!error) {
-      onUpdated(data)
-      alert('Saved! Refresh menu/kitchen pages to see the new name.')
+    setSaving(false)
+
+    if (error) {
+      // Most likely cause: another restaurant already has this slug
+      if (error.code === '23505') {
+        alert('That URL slug is already taken. Please choose a different one.')
+      } else {
+        alert('Could not save, please try again.')
+      }
+      return
+    }
+
+    onUpdated(data)
+    setSlug(data.slug)
+
+    if (slugChanged) {
+      // Move the auth flag over so the admin doesn't get logged out,
+      // and update the URL to match the new slug.
+      const wasAuthed = sessionStorage.getItem(`admin_authed_${restaurant.slug}`)
+      if (wasAuthed) sessionStorage.setItem(`admin_authed_${data.slug}`, wasAuthed)
+      alert('Saved! Note: any previously printed QR codes used the old URL and will no longer work — reprint them from the Table QR codes section below.')
+      navigate(`/r/${data.slug}/admin`, { replace: true })
     } else {
-      alert('Could not save, please try again.')
+      alert('Saved! Refresh menu/kitchen pages to see the new name.')
     }
   }
 
   return (
     <div className="admin-section">
-      <h2>Restaurant name</h2>
+      <h2>Restaurant name &amp; URL</h2>
       <div className="admin-row">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Restaurant name" />
-        <button className="admin-btn" onClick={save}>Save</button>
       </div>
+      <div className="admin-row" style={{ marginTop: 8 }}>
+        <label style={{ fontSize: 14, opacity: 0.8 }}>URL slug:</label>
+        <input
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          placeholder="restaurant-url-slug"
+        />
+        <button className="admin-btn" disabled={saving} onClick={save}>
+          {saving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+      <p style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>
+        Changing the slug changes your admin/menu/kitchen URLs — you'll need to reprint table QR codes.
+      </p>
     </div>
   )
 }
 
-function emptyRow() {
-  return { key: crypto.randomUUID(), name: '', price: '', category: CATEGORIES[0] }
+function emptyRow(defaultCategory = CATEGORIES[0]) {
+  return { key: crypto.randomUUID(), name: '', price: '', category: defaultCategory }
 }
+
+const LAST_CATEGORY_KEY = 'menu_last_category'
 
 function MenuManager({ restaurantId }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
 
+  function getLastCategory() {
+    const stored = localStorage.getItem(`${LAST_CATEGORY_KEY}_${restaurantId}`)
+    return CATEGORIES.includes(stored) ? stored : CATEGORIES[0]
+  }
+
+  function rememberCategory(cat) {
+    localStorage.setItem(`${LAST_CATEGORY_KEY}_${restaurantId}`, cat)
+  }
+
+  // single quick-add row
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
-  const [category, setCategory] = useState(CATEGORIES[0])
+  const [category, setCategory] = useState(getLastCategory())
 
+  // bulk-add mode
   const [bulkMode, setBulkMode] = useState(false)
-  const [bulkRows, setBulkRows] = useState([emptyRow(), emptyRow(), emptyRow()])
+  const [bulkRows, setBulkRows] = useState([emptyRow(getLastCategory()), emptyRow(getLastCategory()), emptyRow(getLastCategory())])
   const [bulkSaving, setBulkSaving] = useState(false)
 
+  // inline edit
   const [editingId, setEditingId] = useState(null)
   const [editDraft, setEditDraft] = useState({ name: '', price: '', category: CATEGORIES[0] })
 
@@ -134,6 +197,7 @@ function MenuManager({ restaurantId }) {
     setLoading(false)
   }
 
+  // ── Quick single add ────────────────────────────
   async function addItem() {
     if (!name || !price) return alert('Enter name and price')
     const { error } = await supabase.from('menu_items').insert({
@@ -144,19 +208,21 @@ function MenuManager({ restaurantId }) {
       available: true,
     })
     if (!error) {
-      setName(''); setPrice(''); setCategory(CATEGORIES[0])
+      rememberCategory(category)
+      setName(''); setPrice('')
       loadItems()
     } else {
       alert('Could not add item, please try again.')
     }
   }
 
+  // ── Bulk add ─────────────────────────────────────
   function updateBulkRow(key, field, value) {
     setBulkRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
 
   function addBulkRow() {
-    setBulkRows((rows) => [...rows, emptyRow()])
+    setBulkRows((rows) => [...rows, emptyRow(getLastCategory())])
   }
 
   function removeBulkRow(key) {
@@ -180,7 +246,9 @@ function MenuManager({ restaurantId }) {
     const { error } = await supabase.from('menu_items').insert(payload)
     setBulkSaving(false)
     if (!error) {
-      setBulkRows([emptyRow(), emptyRow(), emptyRow()])
+      rememberCategory(validRows[validRows.length - 1].category)
+      const lastCat = getLastCategory()
+      setBulkRows([emptyRow(lastCat), emptyRow(lastCat), emptyRow(lastCat)])
       setBulkMode(false)
       loadItems()
     } else {
@@ -188,6 +256,7 @@ function MenuManager({ restaurantId }) {
     }
   }
 
+  // ── Edit existing item ──────────────────────────
   function startEdit(item) {
     setEditingId(item.id)
     setEditDraft({ name: item.name, price: String(item.price), category: item.category || CATEGORIES[0] })
@@ -211,6 +280,7 @@ function MenuManager({ restaurantId }) {
     }
   }
 
+  // ── Delete / toggle ──────────────────────────────
   async function removeItem(id) {
     if (!window.confirm('Delete this item?')) return
     await supabase.from('menu_items').delete().eq('id', id)
@@ -327,7 +397,7 @@ function MenuManager({ restaurantId }) {
       )}
 
       {!loading && items.length === 0 && (
-        <p style={{ marginTop: 16, opacity: 0.7 }}>No menu items yet - add your first one above.</p>
+        <p style={{ marginTop: 16, opacity: 0.7 }}>No menu items yet — add your first one above.</p>
       )}
     </div>
   )
