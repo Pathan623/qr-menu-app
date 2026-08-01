@@ -1,29 +1,29 @@
 ﻿import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
 const CATEGORIES = ['Starters', 'Main Course', 'Desserts', 'Beverages', 'Snacks']
 
 export default function AdminPanel() {
-  const { slug } = useParams()
+  const { adminToken } = useParams()
   const [restaurant, setRestaurant] = useState(null)
   const [notFound, setNotFound] = useState(false)
-  const [authed, setAuthed] = useState(sessionStorage.getItem(`admin_authed_${slug}`) === '1')
+  const [authed, setAuthed] = useState(sessionStorage.getItem(`admin_authed_${adminToken}`) === '1')
   const [pw, setPw] = useState('')
 
   useEffect(() => {
-    supabase.from('restaurants').select('*').eq('slug', slug).single()
+    supabase.from('restaurants').select('*').eq('admin_token', adminToken).single()
       .then(({ data, error }) => {
         if (error || !data) setNotFound(true)
         else setRestaurant(data)
       })
-  }, [slug])
+  }, [adminToken])
 
   function tryLogin() {
     if (!restaurant) return
     if (pw === restaurant.admin_password) {
-      sessionStorage.setItem(`admin_authed_${slug}`, '1')
+      sessionStorage.setItem(`admin_authed_${adminToken}`, '1')
       setAuthed(true)
     } else {
       alert('Wrong password')
@@ -61,13 +61,44 @@ export default function AdminPanel() {
             Menu &amp; table management &middot; Plan: {restaurant.subscription_tier} &middot; Status: {restaurant.subscription_status}
           </div>
         </div>
-        <Link to={`/r/${slug}/kitchen`}>
+        <Link to={`/kitchen/${adminToken}`}>
           <button className="admin-btn">Go to Kitchen</button>
         </Link>
       </div>
+      <PrivateLinks adminToken={adminToken} />
       <RestaurantSettings restaurant={restaurant} onUpdated={setRestaurant} />
       <MenuManager restaurantId={restaurant.id} />
-      <TableManager slug={slug} />
+      <TableManager slug={restaurant.slug} />
+    </div>
+  )
+}
+
+function PrivateLinks({ adminToken }) {
+  const base = window.location.origin
+  const adminUrl = `${base}/admin/${adminToken}`
+  const kitchenUrl = `${base}/kitchen/${adminToken}`
+
+  function copy(url) {
+    navigator.clipboard.writeText(url).then(
+      () => alert('Link copied!'),
+      () => alert('Could not copy, please copy it manually: ' + url)
+    )
+  }
+
+  return (
+    <div className="admin-section">
+      <h2>Your private links</h2>
+      <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 10 }}>
+        These links don't contain your restaurant's name — keep them private, and bookmark them since they're hard to remember.
+      </p>
+      <div className="admin-row" style={{ marginBottom: 8 }}>
+        <input readOnly value={adminUrl} style={{ flex: 1 }} />
+        <button className="admin-btn ghost" onClick={() => copy(adminUrl)}>Copy admin link</button>
+      </div>
+      <div className="admin-row">
+        <input readOnly value={kitchenUrl} style={{ flex: 1 }} />
+        <button className="admin-btn ghost" onClick={() => copy(kitchenUrl)}>Copy kitchen link</button>
+      </div>
     </div>
   )
 }
@@ -81,7 +112,6 @@ function slugify(value) {
 }
 
 function RestaurantSettings({ restaurant, onUpdated }) {
-  const navigate = useNavigate()
   const [name, setName] = useState(restaurant.name)
   const [slug, setSlug] = useState(restaurant.slug)
   const [saving, setSaving] = useState(false)
@@ -91,7 +121,6 @@ function RestaurantSettings({ restaurant, onUpdated }) {
     if (!cleanSlug) return alert('Slug cannot be empty')
 
     setSaving(true)
-    const slugChanged = cleanSlug !== restaurant.slug
 
     const { data, error } = await supabase
       .from('restaurants')
@@ -113,17 +142,7 @@ function RestaurantSettings({ restaurant, onUpdated }) {
 
     onUpdated(data)
     setSlug(data.slug)
-
-    if (slugChanged) {
-      // Move the auth flag over so the admin doesn't get logged out,
-      // and update the URL to match the new slug.
-      const wasAuthed = sessionStorage.getItem(`admin_authed_${restaurant.slug}`)
-      if (wasAuthed) sessionStorage.setItem(`admin_authed_${data.slug}`, wasAuthed)
-      alert('Saved! Note: any previously printed QR codes used the old URL and will no longer work — reprint them from the Table QR codes section below.')
-      navigate(`/r/${data.slug}/admin`, { replace: true })
-    } else {
-      alert('Saved! Refresh menu/kitchen pages to see the new name.')
-    }
+    alert('Saved! Your admin/kitchen links stay the same. Menu QR codes use the new URL — reprint them from the Table QR codes section below.')
   }
 
   return (
@@ -133,7 +152,7 @@ function RestaurantSettings({ restaurant, onUpdated }) {
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Restaurant name" />
       </div>
       <div className="admin-row" style={{ marginTop: 8 }}>
-        <label style={{ fontSize: 14, opacity: 0.8 }}>URL slug:</label>
+        <label style={{ fontSize: 14, opacity: 0.8 }}>Menu URL slug:</label>
         <input
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
@@ -144,7 +163,7 @@ function RestaurantSettings({ restaurant, onUpdated }) {
         </button>
       </div>
       <p style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>
-        Changing the slug changes your admin/menu/kitchen URLs — you'll need to reprint table QR codes.
+        This slug is only used in your customer-facing menu links (QR codes). Your admin and kitchen links never change.
       </p>
     </div>
   )

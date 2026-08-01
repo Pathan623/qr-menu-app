@@ -86,17 +86,13 @@ function ExistingRestaurantForm() {
 
     setChecking(false)
 
-    if (fetchError || !data) {
-      setError('No restaurant found with that name.')
-      return
-    }
-    if (data.admin_password !== password) {
-      setError('Wrong password.')
+    if (fetchError || !data || data.admin_password !== password) {
+      setError('Invalid restaurant name or password.')
       return
     }
 
-    sessionStorage.setItem(`admin_authed_${cleanSlug}`, '1')
-    navigate(`/r/${cleanSlug}/admin`)
+    sessionStorage.setItem(`admin_authed_${data.admin_token}`, '1')
+    navigate(`/admin/${data.admin_token}`)
   }
 
   return (
@@ -149,20 +145,24 @@ function NewRestaurantForm() {
         ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
         : null
 
-    const { error: insertError } = await supabase.from('restaurants').insert({
-      slug,
-      name,
-      admin_password: password,
-      subscription_tier: selectedPlan.id,
-      max_admin_logins: selectedPlan.maxLogins,
-      subscription_status: 'trialing',
-      trial_ends_at: trialEndsAt,
-    })
+    const { data, error: insertError } = await supabase
+      .from('restaurants')
+      .insert({
+        slug,
+        name,
+        admin_password: password,
+        subscription_tier: selectedPlan.id,
+        max_admin_logins: selectedPlan.maxLogins,
+        subscription_status: 'trialing',
+        trial_ends_at: trialEndsAt,
+      })
+      .select()
+      .single()
 
     setSaving(false)
 
-    if (insertError) {
-      if (insertError.code === '23505') {
+    if (insertError || !data) {
+      if (insertError?.code === '23505') {
         setError('This restaurant name is already taken, please choose another.')
       } else {
         setError('Could not create restaurant, please try again.')
@@ -170,8 +170,8 @@ function NewRestaurantForm() {
       return
     }
 
-    sessionStorage.setItem(`admin_authed_${slug}`, '1')
-    navigate(`/r/${slug}/admin`)
+    sessionStorage.setItem(`admin_authed_${data.admin_token}`, '1')
+    navigate(`/admin/${data.admin_token}`)
   }
 
   return (
@@ -243,7 +243,7 @@ function NewRestaurantForm() {
       </button>
       {slug && (
         <p style={{ fontSize: 12, opacity: 0.7, marginTop: 10, textAlign: 'center' }}>
-          Your links: /r/{slug}/admin &middot; /r/{slug}/kitchen &middot; /r/{slug}/menu/1
+          Your menu link: /r/{slug}/menu/1 &middot; your private admin &amp; kitchen links are generated after you create your account
         </p>
       )}
     </form>
