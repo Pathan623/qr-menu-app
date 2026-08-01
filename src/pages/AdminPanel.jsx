@@ -1,27 +1,43 @@
 ﻿import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Link } from 'react-router-dom'
-import { supabase, RESTAURANT_NAME } from '../supabaseClient'
-
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'changeme'
+import { Link, useParams } from 'react-router-dom'
+import { supabase } from '../supabaseClient'
 
 export default function AdminPanel() {
-  const [authed, setAuthed] = useState(sessionStorage.getItem('admin_authed') === '1')
+  const { slug } = useParams()
+  const [restaurant, setRestaurant] = useState(null)
+  const [notFound, setNotFound] = useState(false)
+  const [authed, setAuthed] = useState(sessionStorage.getItem(`admin_authed_${slug}`) === '1')
   const [pw, setPw] = useState('')
 
+  useEffect(() => {
+    supabase.from('restaurants').select('*').eq('slug', slug).single()
+      .then(({ data, error }) => {
+        if (error || !data) setNotFound(true)
+        else setRestaurant(data)
+      })
+  }, [slug])
+
   function tryLogin() {
-    if (pw === ADMIN_PASSWORD) {
-      sessionStorage.setItem('admin_authed', '1')
+    if (!restaurant) return
+    if (pw === restaurant.admin_password) {
+      sessionStorage.setItem(`admin_authed_${slug}`, '1')
       setAuthed(true)
     } else {
       alert('Wrong password')
     }
   }
 
+  if (notFound) {
+    return <div style={{ padding: 40, textAlign: 'center' }}>Restaurant not found.</div>
+  }
+
+  if (!restaurant) return null
+
   if (!authed) {
     return (
       <div className="login-box">
-        <h1 style={{ fontFamily: 'var(--font-display)' }}>{RESTAURANT_NAME} Admin</h1>
+        <h1 style={{ fontFamily: 'var(--font-display)' }}>{restaurant.name} Admin</h1>
         <input
           type="password"
           placeholder="Admin password"
@@ -38,41 +54,39 @@ export default function AdminPanel() {
     <div className="admin-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1>{RESTAURANT_NAME}</h1>
-          <div className="admin-sub">Menu &amp; table management</div>
+          <h1>{restaurant.name}</h1>
+          <div className="admin-sub">
+            Menu &amp; table management &middot; Plan: {restaurant.subscription_tier} &middot; Status: {restaurant.subscription_status}
+          </div>
         </div>
-        <Link to="/kitchen">
+        <Link to={`/r/${slug}/kitchen`}>
           <button className="admin-btn">Go to Kitchen</button>
         </Link>
       </div>
-      <RestaurantSettings />
-      <MenuManager />
-      <TableManager />
+      <RestaurantSettings restaurant={restaurant} onUpdated={setRestaurant} />
+      <MenuManager restaurantId={restaurant.id} />
+      <TableManager slug={slug} />
     </div>
   )
 }
 
-function RestaurantSettings() {
-  const [name, setName] = useState('')
-  const [loaded, setLoaded] = useState(false)
-
-  useEffect(() => {
-    supabase.from('restaurant_settings').select('*').eq('id', 1).single()
-      .then(({ data }) => {
-        setName(data?.name || RESTAURANT_NAME)
-        setLoaded(true)
-      })
-  }, [])
+function RestaurantSettings({ restaurant, onUpdated }) {
+  const [name, setName] = useState(restaurant.name)
 
   async function save() {
-    const { error } = await supabase
-      .from('restaurant_settings')
-      .upsert({ id: 1, name })
-    if (!error) alert('Saved! Refresh menu/kitchen pages to see the new name.')
-    else alert('Could not save, please try again.')
+    const { data, error } = await supabase
+      .from('restaurants')
+      .update({ name })
+      .eq('id', restaurant.id)
+      .select()
+      .single()
+    if (!error) {
+      onUpdated(data)
+      alert('Saved! Refresh menu/kitchen pages to see the new name.')
+    } else {
+      alert('Could not save, please try again.')
+    }
   }
-
-  if (!loaded) return null
 
   return (
     <div className="admin-section">
@@ -85,22 +99,28 @@ function RestaurantSettings() {
   )
 }
 
-function MenuManager() {
+function MenuManager({ restaurantId }) {
   const [items, setItems] = useState([])
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
   const [category, setCategory] = useState('')
 
-  useEffect(() => { loadItems() }, [])
+  useEffect(() => { loadItems() }, [restaurantId])
 
   async function loadItems() {
-    const { data } = await supabase.from('menu_items').select('*').order('category').order('name')
+    const { data } = await supabase
+      .from('menu_items')
+      .select('*')
+      .eq('restaurant_id', restaurantId)
+      .order('category')
+      .order('name')
     setItems(data || [])
   }
 
   async function addItem() {
     if (!name || !price) return alert('Enter name and price')
     const { error } = await supabase.from('menu_items').insert({
+      restaurant_id: restaurantId,
       name,
       price: Number(price),
       category: category || 'Menu',
@@ -153,7 +173,7 @@ function MenuManager() {
   )
 }
 
-function TableManager() {
+function TableManager({ slug }) {
   const [tableCount, setTableCount] = useState(10)
   const baseUrl = window.location.origin
 
@@ -177,7 +197,7 @@ function TableManager() {
       <div className="qr-grid">
         {tables.map((n) => (
           <div className="qr-card" key={n}>
-            <QRCodeSVG value={`${baseUrl}/menu/${n}`} size={128} />
+            <QRCodeSVG value={`${baseUrl}/r/${slug}/menu/${n}`} size={128} />
             <div className="table-label">TABLE {n}</div>
           </div>
         ))}

@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { supabase, RESTAURANT_NAME } from '../supabaseClient'
+import { supabase } from '../supabaseClient'
 
 const CANCEL_WINDOW_SECONDS = 120
 
@@ -17,7 +17,11 @@ const STATUS_TEXT = {
 }
 
 export default function CustomerMenu() {
-  const { tableNumber } = useParams()
+  const { slug, tableNumber } = useParams()
+  const storageKey = `qr_active_order_${slug}_table_${tableNumber}`
+
+  const [restaurant, setRestaurant] = useState(null)
+  const [notFound, setNotFound] = useState(false)
   const [items, setItems] = useState([])
   const [cart, setCart] = useState({})
   const [loading, setLoading] = useState(true)
@@ -27,18 +31,44 @@ export default function CustomerMenu() {
   const [removing, setRemoving] = useState(null)
 
   useEffect(() => {
-    async function loadMenu() {
-      const { data, error } = await supabase
+    async function init() {
+      const { data: rest, error: restErr } = await supabase
+        .from('restaurants')
+        .select('*')
+        .eq('slug', slug)
+        .single()
+
+      if (restErr || !rest) {
+        setNotFound(true)
+        setLoading(false)
+        return
+      }
+      setRestaurant(rest)
+
+      const { data: menu } = await supabase
         .from('menu_items')
         .select('*')
+        .eq('restaurant_id', rest.id)
         .eq('available', true)
         .order('category')
         .order('name')
-      if (!error) setItems(data || [])
+      setItems(menu || [])
+
+      const savedId = localStorage.getItem(storageKey)
+      if (savedId) {
+        const { data: ord, error: ordErr } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('id', savedId)
+          .single()
+        if (!ordErr && ord) setActiveOrder(ord)
+        else localStorage.removeItem(storageKey)
+      }
+
       setLoading(false)
     }
-    loadMenu()
-  }, [])
+    init()
+  }, [slug])
 
   useEffect(() => {
     if (!activeOrder) return
@@ -88,14 +118,23 @@ export default function CustomerMenu() {
       const item = items.find((i) => i.id === id)
       return { id, name: item.name, price: item.price, qty }
     })
+
     const { data, error } = await supabase
       .from('orders')
-      .insert({ table_number: tableNumber, items: orderItems, total: cartTotal, status: 'pending' })
+      .insert({
+        restaurant_id: restaurant.id,
+        table_number: tableNumber,
+        items: orderItems,
+        total: cartTotal,
+        status: 'pending',
+      })
       .select()
       .single()
+
     setPlacing(false)
     if (!error) {
       setActiveOrder(data)
+      localStorage.setItem(storageKey, data.id)
       setCart({})
     } else {
       alert('Could not place order, please try again or call staff.')
@@ -128,6 +167,15 @@ export default function CustomerMenu() {
       if (!error) setActiveOrder({ ...activeOrder, items: newItems, total: newTotal })
     }
     setRemoving(null)
+  }
+
+  function orderMore() {
+    localStorage.removeItem(storageKey)
+    setActiveOrder(null)
+  }
+
+  if (notFound) {
+    return <div style={{ padding: 40, textAlign: 'center' }}>Restaurant not found.</div>
   }
 
   if (activeOrder) {
@@ -172,7 +220,7 @@ export default function CustomerMenu() {
           )}
 
           {(activeOrder.status === 'served' || activeOrder.status === 'cancelled') && (
-            <button className="place-order-btn" style={{ marginTop: 20 }} onClick={() => setActiveOrder(null)}>
+            <button className="place-order-btn" style={{ marginTop: 20 }} onClick={orderMore}>
               Order more
             </button>
           )}
@@ -187,12 +235,14 @@ export default function CustomerMenu() {
     <div className="menu-page">
       <div className="menu-header">
         <div className="table-tag">TABLE {tableNumber}</div>
-        <h1>{RESTAURANT_NAME}</h1>
+        <h1>{restaurant ? restaurant.name : ''}</h1>
       </div>
+
       {loading && <div style={{ padding: 40, textAlign: 'center' }}>Loading menu...</div>}
       {!loading && items.length === 0 && (
         <div style={{ padding: 40, textAlign: 'center' }}>Menu is being updated. Please ask staff.</div>
       )}
+
       {categories.map((cat) => (
         <div key={cat}>
           <div className="menu-category">{cat}</div>
@@ -217,6 +267,7 @@ export default function CustomerMenu() {
           ))}
         </div>
       ))}
+
       {cartCount > 0 && (
         <div className="cart-bar">
           <div>
