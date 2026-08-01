@@ -13,13 +13,13 @@ function CustomerMenuWithKey() {
 }
 
 function KitchenWithKey() {
-  const { slug } = useParams()
-  return <KitchenDashboard key={slug} />
+  const { adminToken } = useParams()
+  return <KitchenDashboard key={adminToken} />
 }
 
 function AdminWithKey() {
-  const { slug } = useParams()
-  return <AdminPanel key={slug} />
+  const { adminToken } = useParams()
+  return <AdminPanel key={adminToken} />
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -27,8 +27,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <Routes>
         <Route path="/r/:slug/menu/:tableNumber" element={<CustomerMenuWithKey />} />
-        <Route path="/r/:slug/kitchen" element={<KitchenWithKey />} />
-        <Route path="/r/:slug/admin" element={<AdminWithKey />} />
+        <Route path="/kitchen/:adminToken" element={<KitchenWithKey />} />
+        <Route path="/admin/:adminToken" element={<AdminWithKey />} />
         <Route path="*" element={<LandingPage />} />
       </Routes>
     </BrowserRouter>
