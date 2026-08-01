@@ -68,7 +68,8 @@ export default function KitchenDashboard() {
     const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .neq('status', 'served')
+      .in('status', ['pending', 'preparing', 'cancelled'])
+      .eq('dismissed_by_kitchen', false)
       .order('created_at', { ascending: true })
 
     if (!error) setOrders(data || [])
@@ -76,6 +77,23 @@ export default function KitchenDashboard() {
 
   async function updateStatus(id, status) {
     await supabase.from('orders').update({ status }).eq('id', id)
+  }
+
+  async function removeItem(order, itemIndex) {
+    const newItems = order.items.filter((_, idx) => idx !== itemIndex)
+    const newTotal = newItems.reduce((sum, it) => sum + it.price * it.qty, 0)
+
+    if (newItems.length === 0) {
+      await supabase.from('orders').update({ items: newItems, total: newTotal, status: 'cancelled' }).eq('id', order.id)
+    } else {
+      await supabase.from('orders').update({ items: newItems, total: newTotal }).eq('id', order.id)
+    }
+    loadOrders()
+  }
+
+  async function dismissTicket(id) {
+    await supabase.from('orders').update({ dismissed_by_kitchen: true }).eq('id', id)
+    loadOrders()
   }
 
   function timeAgo(ts) {
@@ -104,7 +122,7 @@ export default function KitchenDashboard() {
 
       <div className="ticket-grid">
         {orders.map((order) => (
-          <div className="ticket" key={order.id}>
+          <div className={`ticket ${order.status === 'cancelled' ? 'ticket-cancelled' : ''}`} key={order.id}>
             <div className="ticket-perf" />
             <div className="ticket-head">
               <div className="ticket-table">TABLE {order.table_number}</div>
@@ -116,11 +134,25 @@ export default function KitchenDashboard() {
                 {order.items.map((it, idx) => (
                   <div className="ticket-line" key={idx}>
                     <span>{it.qty}x {it.name}</span>
+                    {order.status !== 'cancelled' && (
+                      <button
+                        className="ticket-line-remove"
+                        title="Remove this item (out of stock)"
+                        onClick={() => removeItem(order, idx)}
+                      >
+                        x
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
             <div className="ticket-actions">
+              {order.status === 'cancelled' && (
+                <button className="done" onClick={() => dismissTicket(order.id)}>
+                  DELETE TICKET
+                </button>
+              )}
               {order.status === 'pending' && (
                 <button className="prep" onClick={() => updateStatus(order.id, 'preparing')}>
                   START PREPARING
