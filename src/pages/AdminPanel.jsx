@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
@@ -65,40 +65,9 @@ export default function AdminPanel() {
           <button className="admin-btn">Go to Kitchen</button>
         </Link>
       </div>
-      <PrivateLinks adminToken={adminToken} />
       <RestaurantSettings restaurant={restaurant} onUpdated={setRestaurant} />
       <MenuManager restaurantId={restaurant.id} />
       <TableManager slug={restaurant.slug} />
-    </div>
-  )
-}
-
-function PrivateLinks({ adminToken }) {
-  const base = window.location.origin
-  const adminUrl = `${base}/admin/${adminToken}`
-  const kitchenUrl = `${base}/kitchen/${adminToken}`
-
-  function copy(url) {
-    navigator.clipboard.writeText(url).then(
-      () => alert('Link copied!'),
-      () => alert('Could not copy, please copy it manually: ' + url)
-    )
-  }
-
-  return (
-    <div className="admin-section">
-      <h2>Your private links</h2>
-      <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 10 }}>
-        These links don't contain your restaurant's name — keep them private, and bookmark them since they're hard to remember.
-      </p>
-      <div className="admin-row" style={{ marginBottom: 8 }}>
-        <input readOnly value={adminUrl} style={{ flex: 1 }} />
-        <button className="admin-btn ghost" onClick={() => copy(adminUrl)}>Copy admin link</button>
-      </div>
-      <div className="admin-row">
-        <input readOnly value={kitchenUrl} style={{ flex: 1 }} />
-        <button className="admin-btn ghost" onClick={() => copy(kitchenUrl)}>Copy kitchen link</button>
-      </div>
     </div>
   )
 }
@@ -131,7 +100,6 @@ function RestaurantSettings({ restaurant, onUpdated }) {
     setSaving(false)
 
     if (error) {
-      // Most likely cause: another restaurant already has this slug
       if (error.code === '23505') {
         alert('That URL slug is already taken. Please choose a different one.')
       } else {
@@ -142,7 +110,7 @@ function RestaurantSettings({ restaurant, onUpdated }) {
 
     onUpdated(data)
     setSlug(data.slug)
-    alert('Saved! Your admin/kitchen links stay the same. Menu QR codes use the new URL — reprint them from the Table QR codes section below.')
+    alert('Saved! Your admin/kitchen links stay the same. Menu QR codes use the new URL - reprint them from the Table QR codes section below.')
   }
 
   return (
@@ -188,17 +156,14 @@ function MenuManager({ restaurantId }) {
     localStorage.setItem(`${LAST_CATEGORY_KEY}_${restaurantId}`, cat)
   }
 
-  // single quick-add row
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
   const [category, setCategory] = useState(getLastCategory())
 
-  // bulk-add mode
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkRows, setBulkRows] = useState([emptyRow(getLastCategory()), emptyRow(getLastCategory()), emptyRow(getLastCategory())])
   const [bulkSaving, setBulkSaving] = useState(false)
 
-  // inline edit
   const [editingId, setEditingId] = useState(null)
   const [editDraft, setEditDraft] = useState({ name: '', price: '', category: CATEGORIES[0] })
 
@@ -216,7 +181,6 @@ function MenuManager({ restaurantId }) {
     setLoading(false)
   }
 
-  // ── Quick single add ────────────────────────────
   async function addItem() {
     if (!name || !price) return alert('Enter name and price')
     const { error } = await supabase.from('menu_items').insert({
@@ -235,7 +199,6 @@ function MenuManager({ restaurantId }) {
     }
   }
 
-  // ── Bulk add ─────────────────────────────────────
   function updateBulkRow(key, field, value) {
     setBulkRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
   }
@@ -275,7 +238,6 @@ function MenuManager({ restaurantId }) {
     }
   }
 
-  // ── Edit existing item ──────────────────────────
   function startEdit(item) {
     setEditingId(item.id)
     setEditDraft({ name: item.name, price: String(item.price), category: item.category || CATEGORIES[0] })
@@ -299,7 +261,6 @@ function MenuManager({ restaurantId }) {
     }
   }
 
-  // ── Delete / toggle ──────────────────────────────
   async function removeItem(id) {
     if (!window.confirm('Delete this item?')) return
     await supabase.from('menu_items').delete().eq('id', id)
@@ -416,7 +377,7 @@ function MenuManager({ restaurantId }) {
       )}
 
       {!loading && items.length === 0 && (
-        <p style={{ marginTop: 16, opacity: 0.7 }}>No menu items yet — add your first one above.</p>
+        <p style={{ marginTop: 16, opacity: 0.7 }}>No menu items yet - add your first one above.</p>
       )}
     </div>
   )
