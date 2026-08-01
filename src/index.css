@@ -514,3 +514,53 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 
 .remove-item-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.landing-page {
+  max-width: 420px;
+  margin: 60px auto;
+  padding: 0 20px;
+}
+
+.landing-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 22px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.landing-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--ink);
+  opacity: 0.6;
+}
+
+.landing-tab.active {
+  background: var(--cardamom);
+  color: white;
+  opacity: 1;
+}
+
+.landing-form input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 15px;
+  box-sizing: border-box;
+}
+
+.landing-error {
+  color: var(--danger);
+  font-size: 13px;
+  margin-bottom: 12px;
+  text-align: center;
+}
