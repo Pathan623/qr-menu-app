@@ -445,3 +445,31 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   background: var(--danger);
   color: white;
 }
+
+.order-item-list {
+  text-align: left;
+  max-width: 340px;
+  margin: 24px auto 0;
+  border-top: 1px solid var(--line);
+}
+
+.order-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.remove-item-btn {
+  background: transparent;
+  border: 1.5px solid var(--danger);
+  color: var(--danger);
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.remove-item-btn:disabled { opacity: 0.5; cursor: not-allowed; }

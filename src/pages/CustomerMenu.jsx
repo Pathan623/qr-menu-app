@@ -24,6 +24,7 @@ export default function CustomerMenu() {
   const [placing, setPlacing] = useState(false)
   const [activeOrder, setActiveOrder] = useState(null)
   const [secondsLeft, setSecondsLeft] = useState(0)
+  const [removing, setRemoving] = useState(null)
 
   useEffect(() => {
     async function loadMenu() {
@@ -107,6 +108,28 @@ export default function CustomerMenu() {
     if (!error) setActiveOrder({ ...activeOrder, status: 'cancelled' })
   }
 
+  async function removeOrderItem(itemIndex) {
+    if (!activeOrder) return
+    setRemoving(itemIndex)
+    const newItems = activeOrder.items.filter((_, idx) => idx !== itemIndex)
+    const newTotal = newItems.reduce((sum, it) => sum + it.price * it.qty, 0)
+
+    if (newItems.length === 0) {
+      const { error } = await supabase
+        .from('orders')
+        .update({ items: newItems, total: newTotal, status: 'cancelled' })
+        .eq('id', activeOrder.id)
+      if (!error) setActiveOrder({ ...activeOrder, items: newItems, total: newTotal, status: 'cancelled' })
+    } else {
+      const { error } = await supabase
+        .from('orders')
+        .update({ items: newItems, total: newTotal })
+        .eq('id', activeOrder.id)
+      if (!error) setActiveOrder({ ...activeOrder, items: newItems, total: newTotal })
+    }
+    setRemoving(null)
+  }
+
   if (activeOrder) {
     const st = STATUS_TEXT[activeOrder.status] || STATUS_TEXT.pending
     const canCancel = activeOrder.status === 'pending' && secondsLeft > 0
@@ -119,14 +142,35 @@ export default function CustomerMenu() {
           <h2>{st.icon} {st.label}</h2>
           <div className="ticket-num">Order #{activeOrder.id.slice(0, 8).toUpperCase()} - Table {tableNumber}</div>
           <p style={{ marginTop: 24 }}>{st.desc}</p>
+
+          {activeOrder.items && activeOrder.items.length > 0 && (
+            <div className="order-item-list">
+              {activeOrder.items.map((it, idx) => (
+                <div className="order-item-row" key={idx}>
+                  <span>{it.qty}x {it.name} - Rs{it.price * it.qty}</span>
+                  {canCancel && (
+                    <button
+                      className="remove-item-btn"
+                      disabled={removing === idx}
+                      onClick={() => removeOrderItem(idx)}
+                    >
+                      {removing === idx ? '...' : 'Remove'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {canCancel && (
             <>
               <div className="cancel-timer">
-                You can cancel this order for {mins}:{secs.toString().padStart(2, '0')} more
+                You can cancel items for {mins}:{secs.toString().padStart(2, '0')} more
               </div>
-              <button className="cancel-order-btn" onClick={cancelOrder}>Cancel Order</button>
+              <button className="cancel-order-btn" onClick={cancelOrder}>Cancel Entire Order</button>
             </>
           )}
+
           {(activeOrder.status === 'served' || activeOrder.status === 'cancelled') && (
             <button className="place-order-btn" style={{ marginTop: 20 }} onClick={() => setActiveOrder(null)}>
               Order more
