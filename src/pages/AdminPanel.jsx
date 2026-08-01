@@ -3,6 +3,8 @@ import { QRCodeSVG } from 'qrcode.react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
+const CATEGORIES = ['Starters', 'Main Course', 'Desserts', 'Beverages', 'Snacks']
+
 export default function AdminPanel() {
   const { slug } = useParams()
   const [restaurant, setRestaurant] = useState(null)
@@ -99,15 +101,29 @@ function RestaurantSettings({ restaurant, onUpdated }) {
   )
 }
 
+function emptyRow() {
+  return { key: crypto.randomUUID(), name: '', price: '', category: CATEGORIES[0] }
+}
+
 function MenuManager({ restaurantId }) {
   const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+
   const [name, setName] = useState('')
   const [price, setPrice] = useState('')
-  const [category, setCategory] = useState('')
+  const [category, setCategory] = useState(CATEGORIES[0])
+
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkRows, setBulkRows] = useState([emptyRow(), emptyRow(), emptyRow()])
+  const [bulkSaving, setBulkSaving] = useState(false)
+
+  const [editingId, setEditingId] = useState(null)
+  const [editDraft, setEditDraft] = useState({ name: '', price: '', category: CATEGORIES[0] })
 
   useEffect(() => { loadItems() }, [restaurantId])
 
   async function loadItems() {
+    setLoading(true)
     const { data } = await supabase
       .from('menu_items')
       .select('*')
@@ -115,6 +131,7 @@ function MenuManager({ restaurantId }) {
       .order('category')
       .order('name')
     setItems(data || [])
+    setLoading(false)
   }
 
   async function addItem() {
@@ -123,16 +140,79 @@ function MenuManager({ restaurantId }) {
       restaurant_id: restaurantId,
       name,
       price: Number(price),
-      category: category || 'Menu',
+      category,
       available: true,
     })
     if (!error) {
-      setName(''); setPrice(''); setCategory('')
+      setName(''); setPrice(''); setCategory(CATEGORIES[0])
       loadItems()
+    } else {
+      alert('Could not add item, please try again.')
+    }
+  }
+
+  function updateBulkRow(key, field, value) {
+    setBulkRows((rows) => rows.map((r) => (r.key === key ? { ...r, [field]: value } : r)))
+  }
+
+  function addBulkRow() {
+    setBulkRows((rows) => [...rows, emptyRow()])
+  }
+
+  function removeBulkRow(key) {
+    setBulkRows((rows) => (rows.length > 1 ? rows.filter((r) => r.key !== key) : rows))
+  }
+
+  async function saveBulkRows() {
+    const validRows = bulkRows.filter((r) => r.name.trim() && r.price !== '')
+    if (validRows.length === 0) {
+      alert('Fill in at least one item (name + price) before saving.')
+      return
+    }
+    setBulkSaving(true)
+    const payload = validRows.map((r) => ({
+      restaurant_id: restaurantId,
+      name: r.name.trim(),
+      price: Number(r.price),
+      category: r.category,
+      available: true,
+    }))
+    const { error } = await supabase.from('menu_items').insert(payload)
+    setBulkSaving(false)
+    if (!error) {
+      setBulkRows([emptyRow(), emptyRow(), emptyRow()])
+      setBulkMode(false)
+      loadItems()
+    } else {
+      alert('Could not save items, please try again.')
+    }
+  }
+
+  function startEdit(item) {
+    setEditingId(item.id)
+    setEditDraft({ name: item.name, price: String(item.price), category: item.category || CATEGORIES[0] })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+  }
+
+  async function saveEdit(id) {
+    if (!editDraft.name || editDraft.price === '') return alert('Enter name and price')
+    const { error } = await supabase
+      .from('menu_items')
+      .update({ name: editDraft.name, price: Number(editDraft.price), category: editDraft.category })
+      .eq('id', id)
+    if (!error) {
+      setEditingId(null)
+      loadItems()
+    } else {
+      alert('Could not save changes, please try again.')
     }
   }
 
   async function removeItem(id) {
+    if (!window.confirm('Delete this item?')) return
     await supabase.from('menu_items').delete().eq('id', id)
     loadItems()
   }
@@ -142,33 +222,164 @@ function MenuManager({ restaurantId }) {
     loadItems()
   }
 
+  const grouped = CATEGORIES.map((cat) => ({
+    cat,
+    items: items.filter((i) => (i.category || CATEGORIES[0]) === cat),
+  })).filter((g) => g.items.length > 0)
+
+  const uncategorized = items.filter((i) => !CATEGORIES.includes(i.category))
+
   return (
     <div className="admin-section">
-      <h2>Menu items</h2>
-      <div className="admin-row">
-        <input placeholder="Item name" value={name} onChange={(e) => setName(e.target.value)} />
-        <input placeholder="Price (Rs)" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
-        <input placeholder="Category (e.g. Starters)" value={category} onChange={(e) => setCategory(e.target.value)} />
-        <button className="admin-btn" onClick={addItem}>Add item</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <h2>Menu items</h2>
+        <button className="admin-btn ghost" onClick={() => setBulkMode((v) => !v)}>
+          {bulkMode ? 'Switch to single add' : '+ Add multiple items'}
+        </button>
       </div>
 
-      {items.map((item) => (
-        <div className="admin-list-item" key={item.id}>
-          <span style={{ opacity: item.available ? 1 : 0.4 }}>
-            {item.name} - Rs{item.price} <em style={{ opacity: 0.6 }}>({item.category})</em>
-          </span>
-          <span>
-            <button
-              className="admin-btn"
-              style={{ marginRight: 8, background: item.available ? 'var(--cardamom)' : '#999' }}
-              onClick={() => toggleAvailable(item.id, item.available)}
-            >
-              {item.available ? 'Available' : 'Hidden'}
+      {!bulkMode ? (
+        <div className="admin-row">
+          <input placeholder="Item name" value={name} onChange={(e) => setName(e.target.value)} />
+          <input placeholder="Price (Rs)" type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <button className="admin-btn" onClick={addItem}>Add item</button>
+        </div>
+      ) : (
+        <div style={{ marginTop: 10 }}>
+          {bulkRows.map((row) => (
+            <div className="admin-row" key={row.key} style={{ marginBottom: 8 }}>
+              <input
+                placeholder="Item name"
+                value={row.name}
+                onChange={(e) => updateBulkRow(row.key, 'name', e.target.value)}
+              />
+              <input
+                placeholder="Price (Rs)"
+                type="number"
+                value={row.price}
+                onChange={(e) => updateBulkRow(row.key, 'price', e.target.value)}
+              />
+              <select
+                value={row.category}
+                onChange={(e) => updateBulkRow(row.key, 'category', e.target.value)}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <button className="admin-btn ghost" onClick={() => removeBulkRow(row.key)}>Remove</button>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+            <button className="admin-btn ghost" onClick={addBulkRow}>+ Add another row</button>
+            <button className="admin-btn" disabled={bulkSaving} onClick={saveBulkRows}>
+              {bulkSaving ? 'Saving...' : 'Save all items'}
             </button>
-            <button className="admin-btn ghost" onClick={() => removeItem(item.id)}>Delete</button>
-          </span>
+          </div>
+        </div>
+      )}
+
+      {loading && <p style={{ marginTop: 16, opacity: 0.7 }}>Loading menu...</p>}
+
+      {!loading && grouped.map(({ cat, items: catItems }) => (
+        <div key={cat} style={{ marginTop: 18 }}>
+          <div className="menu-category">{cat}</div>
+          {catItems.map((item) => (
+            <MenuRow
+              key={item.id}
+              item={item}
+              isEditing={editingId === item.id}
+              editDraft={editDraft}
+              setEditDraft={setEditDraft}
+              onStartEdit={() => startEdit(item)}
+              onCancelEdit={cancelEdit}
+              onSaveEdit={() => saveEdit(item.id)}
+              onToggleAvailable={() => toggleAvailable(item.id, item.available)}
+              onRemove={() => removeItem(item.id)}
+            />
+          ))}
         </div>
       ))}
+
+      {!loading && uncategorized.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <div className="menu-category">Other</div>
+          {uncategorized.map((item) => (
+            <MenuRow
+              key={item.id}
+              item={item}
+              isEditing={editingId === item.id}
+              editDraft={editDraft}
+              setEditDraft={setEditDraft}
+              onStartEdit={() => startEdit(item)}
+              onCancelEdit={cancelEdit}
+              onSaveEdit={() => saveEdit(item.id)}
+              onToggleAvailable={() => toggleAvailable(item.id, item.available)}
+              onRemove={() => removeItem(item.id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {!loading && items.length === 0 && (
+        <p style={{ marginTop: 16, opacity: 0.7 }}>No menu items yet - add your first one above.</p>
+      )}
+    </div>
+  )
+}
+
+function MenuRow({ item, isEditing, editDraft, setEditDraft, onStartEdit, onCancelEdit, onSaveEdit, onToggleAvailable, onRemove }) {
+  if (isEditing) {
+    return (
+      <div className="admin-list-item">
+        <div className="admin-row" style={{ flex: 1, margin: 0 }}>
+          <input
+            value={editDraft.name}
+            onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+          />
+          <input
+            type="number"
+            value={editDraft.price}
+            onChange={(e) => setEditDraft((d) => ({ ...d, price: e.target.value }))}
+          />
+          <select
+            value={editDraft.category}
+            onChange={(e) => setEditDraft((d) => ({ ...d, category: e.target.value }))}
+          >
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+        <span>
+          <button className="admin-btn" style={{ marginRight: 8 }} onClick={onSaveEdit}>Save</button>
+          <button className="admin-btn ghost" onClick={onCancelEdit}>Cancel</button>
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="admin-list-item">
+      <span style={{ opacity: item.available ? 1 : 0.4 }}>
+        {item.name} - Rs{item.price} <em style={{ opacity: 0.6 }}>({item.category})</em>
+      </span>
+      <span>
+        <button
+          className="admin-btn"
+          style={{ marginRight: 8, background: item.available ? 'var(--cardamom)' : '#999' }}
+          onClick={onToggleAvailable}
+        >
+          {item.available ? 'Available' : 'Hidden'}
+        </button>
+        <button className="admin-btn ghost" style={{ marginRight: 8 }} onClick={onStartEdit}>Edit</button>
+        <button className="admin-btn ghost" onClick={onRemove}>Delete</button>
+      </span>
     </div>
   )
 }
