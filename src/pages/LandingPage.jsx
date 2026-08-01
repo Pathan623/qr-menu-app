@@ -1,9 +1,7 @@
-﻿
-
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
- 
+
 const PLANS = [
   {
     id: 'starter',
@@ -33,15 +31,15 @@ const PLANS = [
     features: ['5 admin logins', 'Unlimited tables', 'Kitchen dashboard', 'QR code menus'],
   },
 ]
- 
+
 export default function LandingPage() {
   const [mode, setMode] = useState('existing') // 'existing' | 'new'
- 
+
   return (
     <div className="landing-page">
       <h1 style={{ fontFamily: 'var(--font-display)', textAlign: 'center', marginBottom: 6 }}>TapNServe</h1>
       <p style={{ textAlign: 'center', opacity: 0.7, marginBottom: 28 }}>QR ordering &amp; kitchen alerts for restaurants</p>
- 
+
       <div className="landing-tabs">
         <button
           className={`landing-tab ${mode === 'existing' ? 'active' : ''}`}
@@ -56,19 +54,19 @@ export default function LandingPage() {
           New Restaurant
         </button>
       </div>
- 
+
       {mode === 'existing' ? <ExistingRestaurantForm /> : <NewRestaurantForm />}
     </div>
   )
 }
- 
+
 function ExistingRestaurantForm() {
   const navigate = useNavigate()
   const [slug, setSlug] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(false)
- 
+
   async function handleLogin(e) {
     e.preventDefault()
     setError('')
@@ -77,26 +75,26 @@ function ExistingRestaurantForm() {
       return
     }
     setChecking(true)
- 
+
     const cleanSlug = slug.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
- 
+
     const { data, error: fetchError } = await supabase
       .from('restaurants')
       .select('*')
       .eq('slug', cleanSlug)
       .single()
- 
+
     setChecking(false)
- 
+
     if (fetchError || !data || data.admin_password !== password) {
       setError('Invalid restaurant name or password.')
       return
     }
- 
+
     sessionStorage.setItem(`admin_authed_${data.admin_token}`, '1')
-    navigate(`/admin/${data.admin_token}`)
+    navigate(`/dashboard/${data.admin_token}`)
   }
- 
+
   return (
     <form className="landing-form" onSubmit={handleLogin}>
       <input
@@ -117,7 +115,7 @@ function ExistingRestaurantForm() {
     </form>
   )
 }
- 
+
 function NewRestaurantForm() {
   const navigate = useNavigate()
   const [name, setName] = useState('')
@@ -126,13 +124,13 @@ function NewRestaurantForm() {
   const [planId, setPlanId] = useState('starter')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
- 
+
   const selectedPlan = PLANS.find((p) => p.id === planId)
- 
+
   function slugify(text) {
     return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
   }
- 
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
@@ -141,12 +139,12 @@ function NewRestaurantForm() {
       return
     }
     setSaving(true)
- 
+
     const trialEndsAt =
       planId === 'starter'
         ? new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString()
         : null
- 
+
     const { data, error: insertError } = await supabase
       .from('restaurants')
       .insert({
@@ -160,9 +158,9 @@ function NewRestaurantForm() {
       })
       .select()
       .single()
- 
+
     setSaving(false)
- 
+
     if (insertError || !data) {
       if (insertError?.code === '23505') {
         setError('This restaurant name is already taken, please choose another.')
@@ -171,11 +169,11 @@ function NewRestaurantForm() {
       }
       return
     }
- 
+
     sessionStorage.setItem(`admin_authed_${data.admin_token}`, '1')
-    navigate(`/admin/${data.admin_token}`)
+    navigate(`/dashboard/${data.admin_token}`)
   }
- 
+
   return (
     <form className="landing-form" onSubmit={handleSubmit}>
       <input
@@ -197,7 +195,7 @@ function NewRestaurantForm() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
- 
+
       <div
         style={{
           display: 'grid',
@@ -234,7 +232,7 @@ function NewRestaurantForm() {
           )
         })}
       </div>
- 
+
       {error && <div className="landing-error">{error}</div>}
       <button className="admin-btn" type="submit" disabled={saving} style={{ width: '100%' }}>
         {saving
@@ -251,4 +249,3 @@ function NewRestaurantForm() {
     </form>
   )
 }
- 
