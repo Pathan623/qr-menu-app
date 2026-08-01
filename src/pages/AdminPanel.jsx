@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
@@ -65,9 +65,40 @@ export default function AdminPanel() {
           <button className="admin-btn">Go to Kitchen</button>
         </Link>
       </div>
+      <PrivateLinks adminToken={adminToken} />
       <RestaurantSettings restaurant={restaurant} onUpdated={setRestaurant} />
       <MenuManager restaurantId={restaurant.id} />
       <TableManager slug={restaurant.slug} />
+    </div>
+  )
+}
+
+function PrivateLinks({ adminToken }) {
+  const base = window.location.origin
+  const adminUrl = `${base}/admin/${adminToken}`
+  const kitchenUrl = `${base}/kitchen/${adminToken}`
+
+  function copy(url) {
+    navigator.clipboard.writeText(url).then(
+      () => alert('Link copied!'),
+      () => alert('Could not copy, please copy it manually: ' + url)
+    )
+  }
+
+  return (
+    <div className="admin-section">
+      <h2>Your private links</h2>
+      <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 10 }}>
+        These links don't contain your restaurant's name — keep them private, and bookmark them since they're hard to remember.
+      </p>
+      <div className="admin-row" style={{ marginBottom: 8 }}>
+        <input readOnly value={adminUrl} style={{ flex: 1 }} />
+        <button className="admin-btn ghost" onClick={() => copy(adminUrl)}>Copy admin link</button>
+      </div>
+      <div className="admin-row">
+        <input readOnly value={kitchenUrl} style={{ flex: 1 }} />
+        <button className="admin-btn ghost" onClick={() => copy(kitchenUrl)}>Copy kitchen link</button>
+      </div>
     </div>
   )
 }
