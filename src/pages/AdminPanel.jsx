@@ -5,6 +5,21 @@ import { supabase } from '../supabaseClient'
 
 const CATEGORIES = ['Starters', 'Main Course', 'Desserts', 'Beverages', 'Snacks']
 
+const BILLING_PLANS = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    priceLabel: 'Rs.800/mo',
+    features: ['1 admin login', 'Up to 10 tables', 'Kitchen dashboard', 'QR code menus'],
+  },
+  {
+    id: 'unlimited',
+    name: 'Unlimited',
+    priceLabel: 'Rs.2,500/mo',
+    features: ['5 admin logins', 'Unlimited tables', 'Kitchen dashboard', 'QR code menus'],
+  },
+]
+
 export default function AdminPanel() {
   const { adminToken } = useParams()
   const [restaurant, setRestaurant] = useState(null)
@@ -93,7 +108,6 @@ function BillingSection({ restaurant, adminToken, onUpdated }) {
     setError('')
 
     try {
-      // 1. Ask create-subscription Edge Function to create a Razorpay subscription
       const { data, error: fnError } = await supabase.functions.invoke('create-subscription', {
         body: { adminToken, planId },
       })
@@ -104,7 +118,6 @@ function BillingSection({ restaurant, adminToken, onUpdated }) {
 
       const { subscriptionId, keyId, restaurantName } = data
 
-      // 2. Load Razorpay Checkout script if not already loaded
       if (!window.Razorpay) {
         await new Promise((resolve, reject) => {
           const script = document.createElement('script')
@@ -115,7 +128,6 @@ function BillingSection({ restaurant, adminToken, onUpdated }) {
         })
       }
 
-      // 3. Open Razorpay Checkout for the subscription
       const options = {
         key: keyId,
         subscription_id: subscriptionId,
@@ -139,30 +151,90 @@ function BillingSection({ restaurant, adminToken, onUpdated }) {
     }
   }
 
-  const isActive = restaurant.subscription_status === 'active'
   const isTrialing = restaurant.subscription_status === 'trialing'
+  const isActive = restaurant.subscription_status === 'active'
+  const selectedPlan = BILLING_PLANS.find((p) => p.id === planId)
 
   return (
     <div className="admin-section">
       <h2>Billing</h2>
-      <p style={{ fontSize: 14, opacity: 0.8, marginBottom: 12 }}>
-        Plan: <strong>{restaurant.subscription_tier}</strong> &middot; Status: <strong>{restaurant.subscription_status}</strong>
+      <p style={{ fontSize: 14, opacity: 0.8, marginBottom: 18 }}>
+        Current status: <strong>{restaurant.subscription_status}</strong>
         {restaurant.trial_ends_at && isTrialing && (
           <> &middot; Trial ends {new Date(restaurant.trial_ends_at).toLocaleDateString()}</>
         )}
       </p>
 
-      <div className="admin-row" style={{ marginBottom: 12 }}>
-        <select value={planId} onChange={(e) => setPlanId(e.target.value)}>
-          <option value="starter">Starter - Rs.800/mo</option>
-          <option value="unlimited">Unlimited - Rs.2,500/mo</option>
-        </select>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 14,
+          marginBottom: 18,
+        }}
+      >
+        {BILLING_PLANS.map((plan) => {
+          const isSelected = plan.id === planId
+          const isCurrentPlan = plan.id === restaurant.subscription_tier
+
+          return (
+            <button
+              type="button"
+              key={plan.id}
+              onClick={() => setPlanId(plan.id)}
+              style={{
+                textAlign: 'left',
+                cursor: 'pointer',
+                borderRadius: 12,
+                padding: '18px 16px',
+                border: isSelected ? '2px solid var(--cardamom)' : '1.5px solid var(--line)',
+                background: isSelected ? 'rgba(63, 102, 82, 0.08)' : 'white',
+                position: 'relative',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {isCurrentPlan && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 12,
+                    right: 12,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    color: 'var(--cardamom-deep)',
+                    background: 'rgba(63, 102, 82, 0.12)',
+                    padding: '3px 8px',
+                    borderRadius: 20,
+                  }}
+                >
+                  CURRENT
+                </span>
+              )}
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 17, marginBottom: 4 }}>
+                {plan.name}
+              </div>
+              <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 12, fontFamily: 'var(--font-mono)' }}>
+                {plan.priceLabel}
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, opacity: 0.85, lineHeight: 1.7 }}>
+                {plan.features.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            </button>
+          )
+        })}
       </div>
 
       {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
 
       <button className="admin-btn" disabled={loading} onClick={handleSubscribe}>
-        {loading ? 'Processing...' : isActive ? 'Change / Renew Subscription' : 'Subscribe Now'}
+        {loading
+          ? 'Processing...'
+          : isActive && planId === restaurant.subscription_tier
+          ? `Renew ${selectedPlan.name} Plan`
+          : `Subscribe to ${selectedPlan.name} - ${selectedPlan.priceLabel}`}
       </button>
     </div>
   )
