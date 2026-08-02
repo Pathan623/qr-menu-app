@@ -40,6 +40,13 @@ export default function Dashboard() {
           <div className="dashboard-card-title">Kitchen Dashboard</div>
           <div className="dashboard-card-desc">Live incoming orders, print bills</div>
         </Link>
+
+        <Link to={`/billing/${adminToken}`} className="dashboard-card">
+          <div className="dashboard-card-title">Billing &amp; Subscription</div>
+          <div className="dashboard-card-desc">
+            Plan: {restaurant.subscription_tier} &middot; Status: {restaurant.subscription_status}
+          </div>
+        </Link>
       </div>
     </div>
   )

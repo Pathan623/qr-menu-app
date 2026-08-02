@@ -5,21 +5,6 @@ import { supabase } from '../supabaseClient'
 
 const CATEGORIES = ['Starters', 'Main Course', 'Desserts', 'Beverages', 'Snacks']
 
-const BILLING_PLANS = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    priceLabel: 'Rs.800/mo',
-    features: ['1 admin login', 'Up to 10 tables', 'Kitchen dashboard', 'QR code menus'],
-  },
-  {
-    id: 'unlimited',
-    name: 'Unlimited',
-    priceLabel: 'Rs.2,500/mo',
-    features: ['5 admin logins', 'Unlimited tables', 'Kitchen dashboard', 'QR code menus'],
-  },
-]
-
 export default function AdminPanel() {
   const { adminToken } = useParams()
   const [restaurant, setRestaurant] = useState(null)
@@ -76,11 +61,15 @@ export default function AdminPanel() {
             Menu &amp; table management &middot; Plan: {restaurant.subscription_tier} &middot; Status: {restaurant.subscription_status}
           </div>
         </div>
-        <Link to={`/kitchen/${adminToken}`}>
-          <button className="admin-btn">Go to Kitchen</button>
-        </Link>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link to={`/billing/${adminToken}`}>
+            <button className="admin-btn ghost">Billing</button>
+          </Link>
+          <Link to={`/kitchen/${adminToken}`}>
+            <button className="admin-btn">Go to Kitchen</button>
+          </Link>
+        </div>
       </div>
-      <BillingSection restaurant={restaurant} adminToken={adminToken} onUpdated={setRestaurant} />
       <RestaurantSettings restaurant={restaurant} onUpdated={setRestaurant} />
       <MenuManager restaurantId={restaurant.id} />
       <TableManager slug={restaurant.slug} />
@@ -94,150 +83,6 @@ function slugify(value) {
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-}
-
-function BillingSection({ restaurant, adminToken, onUpdated }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [planId, setPlanId] = useState(
-    restaurant.subscription_tier === 'unlimited' ? 'unlimited' : 'starter'
-  )
-
-  async function handleSubscribe() {
-    setLoading(true)
-    setError('')
-
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke('create-subscription', {
-        body: { adminToken, planId },
-      })
-
-      if (fnError) throw fnError
-      if (!data) throw new Error('No response from server')
-      if (data.error) throw new Error(data.error)
-
-      const { subscriptionId, keyId, restaurantName } = data
-
-      if (!window.Razorpay) {
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script')
-          script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-          script.onload = resolve
-          script.onerror = reject
-          document.body.appendChild(script)
-        })
-      }
-
-      const options = {
-        key: keyId,
-        subscription_id: subscriptionId,
-        name: 'TapNServe Subscription',
-        description: `${planId === 'unlimited' ? 'Unlimited' : 'Starter'} plan`,
-        handler: function () {
-          alert('Payment successful! Your subscription will update shortly.')
-          window.location.reload()
-        },
-        prefill: { name: restaurantName },
-        theme: { color: '#3F6652' },
-      }
-
-      const rzp = new window.Razorpay(options)
-      rzp.open()
-    } catch (err) {
-      console.error(err)
-      setError(err.message || 'Something went wrong, please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const isTrialing = restaurant.subscription_status === 'trialing'
-  const isActive = restaurant.subscription_status === 'active'
-  const selectedPlan = BILLING_PLANS.find((p) => p.id === planId)
-
-  return (
-    <div className="admin-section">
-      <h2>Billing</h2>
-      <p style={{ fontSize: 14, opacity: 0.8, marginBottom: 18 }}>
-        Current status: <strong>{restaurant.subscription_status}</strong>
-        {restaurant.trial_ends_at && isTrialing && (
-          <> &middot; Trial ends {new Date(restaurant.trial_ends_at).toLocaleDateString()}</>
-        )}
-      </p>
-
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 14,
-          marginBottom: 18,
-        }}
-      >
-        {BILLING_PLANS.map((plan) => {
-          const isSelected = plan.id === planId
-          const isCurrentPlan = plan.id === restaurant.subscription_tier
-
-          return (
-            <button
-              type="button"
-              key={plan.id}
-              onClick={() => setPlanId(plan.id)}
-              style={{
-                textAlign: 'left',
-                cursor: 'pointer',
-                borderRadius: 12,
-                padding: '18px 16px',
-                border: isSelected ? '2px solid var(--cardamom)' : '1.5px solid var(--line)',
-                background: isSelected ? 'rgba(63, 102, 82, 0.08)' : 'white',
-                position: 'relative',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isCurrentPlan && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 12,
-                    right: 12,
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    color: 'var(--cardamom-deep)',
-                    background: 'rgba(63, 102, 82, 0.12)',
-                    padding: '3px 8px',
-                    borderRadius: 20,
-                  }}
-                >
-                  CURRENT
-                </span>
-              )}
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 17, marginBottom: 4 }}>
-                {plan.name}
-              </div>
-              <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 12, fontFamily: 'var(--font-mono)' }}>
-                {plan.priceLabel}
-              </div>
-              <ul style={{ margin: 0, paddingLeft: 16, fontSize: 12.5, opacity: 0.85, lineHeight: 1.7 }}>
-                {plan.features.map((f) => (
-                  <li key={f}>{f}</li>
-                ))}
-              </ul>
-            </button>
-          )
-        })}
-      </div>
-
-      {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
-
-      <button className="admin-btn" disabled={loading} onClick={handleSubscribe}>
-        {loading
-          ? 'Processing...'
-          : isActive && planId === restaurant.subscription_tier
-          ? `Renew ${selectedPlan.name} Plan`
-          : `Subscribe to ${selectedPlan.name} - ${selectedPlan.priceLabel}`}
-      </button>
-    </div>
-  )
 }
 
 function RestaurantSettings({ restaurant, onUpdated }) {

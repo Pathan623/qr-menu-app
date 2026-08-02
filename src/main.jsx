@@ -6,6 +6,7 @@ import KitchenDashboard from './pages/KitchenDashboard.jsx'
 import AdminPanel from './pages/AdminPanel.jsx'
 import LandingPage from './pages/LandingPage.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import Billing from './pages/Billing.jsx'
 import './index.css'
 
 function CustomerMenuWithKey() {
@@ -28,6 +29,11 @@ function DashboardWithKey() {
   return <Dashboard key={adminToken} />
 }
 
+function BillingWithKey() {
+  const { adminToken } = useParams()
+  return <Billing key={adminToken} />
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
@@ -36,6 +42,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/kitchen/:adminToken" element={<KitchenWithKey />} />
         <Route path="/admin/:adminToken" element={<AdminWithKey />} />
         <Route path="/dashboard/:adminToken" element={<DashboardWithKey />} />
+        <Route path="/billing/:adminToken" element={<BillingWithKey />} />
         <Route path="*" element={<LandingPage />} />
       </Routes>
     </BrowserRouter>
