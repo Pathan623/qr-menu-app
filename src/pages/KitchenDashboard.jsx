@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+﻿import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
@@ -39,11 +39,28 @@ export default function KitchenDashboard() {
     return () => supabase.removeChannel(channel)
   }, [restaurantId])
 
-  function enableSound() {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    audioCtxRef.current = ctx
-    setSoundEnabled(true)
-  }
+  // Auto-enable sound on the very first interaction anywhere on the page
+  // (click, tap, or keypress) so staff never have to press a separate button.
+  useEffect(() => {
+    function initAudioOnce() {
+      if (!audioCtxRef.current) {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)()
+        audioCtxRef.current = ctx
+        setSoundEnabled(true)
+      }
+      window.removeEventListener('click', initAudioOnce)
+      window.removeEventListener('touchstart', initAudioOnce)
+      window.removeEventListener('keydown', initAudioOnce)
+    }
+    window.addEventListener('click', initAudioOnce)
+    window.addEventListener('touchstart', initAudioOnce)
+    window.addEventListener('keydown', initAudioOnce)
+    return () => {
+      window.removeEventListener('click', initAudioOnce)
+      window.removeEventListener('touchstart', initAudioOnce)
+      window.removeEventListener('keydown', initAudioOnce)
+    }
+  }, [])
 
   function playBeep() {
     const ctx = audioCtxRef.current
@@ -113,7 +130,9 @@ export default function KitchenDashboard() {
         <h1><span className="live-dot" />Kitchen Orders</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {!soundEnabled && (
-            <button className="admin-btn" onClick={enableSound}>🔊 Enable Sound</button>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.6, color: 'var(--ticket)' }}>
+              Tap anywhere to enable sound
+            </div>
           )}
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, opacity: 0.7, color: 'var(--ticket)' }}>
             {orders.length} active
@@ -122,7 +141,7 @@ export default function KitchenDashboard() {
       </div>
 
       {orders.length === 0 && (
-        <div className="empty-state">No active orders — waiting for tables to order…</div>
+        <div className="empty-state">No active orders - waiting for tables to order...</div>
       )}
 
       <div className="ticket-grid">
@@ -138,13 +157,13 @@ export default function KitchenDashboard() {
               <div style={{ marginTop: 10 }}>
                 {order.items.map((it, idx) => (
                   <div className="ticket-line" key={idx}>
-                    <span>{it.qty}× {it.name}</span>
+                    <span>{it.qty}x {it.name}</span>
                     <button
                       className="ticket-line-remove"
                       title="Remove this item (out of stock)"
                       onClick={() => removeItem(order, idx)}
                     >
-                      ✕
+                      x
                     </button>
                   </div>
                 ))}
