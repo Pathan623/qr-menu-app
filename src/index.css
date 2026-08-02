@@ -604,3 +604,127 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   font-size: 13.5px;
   color: var(--cardamom-deep);
 }
+
+.app-shell {
+  display: flex;
+  min-height: 100%;
+}
+
+.app-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--ink);
+  color: var(--paper-soft);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  min-height: 100vh;
+}
+
+.sidebar-top {
+  margin-bottom: 26px;
+}
+
+.sidebar-brand {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--turmeric);
+}
+
+.sidebar-restaurant {
+  font-size: 12.5px;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.sidebar-link {
+  display: block;
+  text-decoration: none;
+  color: var(--paper-soft);
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.sidebar-link.active {
+  background: var(--cardamom);
+}
+
+.sidebar-link-label {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.sidebar-link-desc {
+  display: block;
+  font-size: 11px;
+  opacity: 0.65;
+  margin-top: 2px;
+}
+
+.sidebar-back {
+  color: var(--paper-soft);
+  opacity: 0.55;
+  font-size: 12.5px;
+  text-decoration: none;
+  padding: 10px 12px;
+}
+
+.sidebar-back:hover {
+  opacity: 1;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    flex-direction: column;
+  }
+  .app-sidebar {
+    width: 100%;
+    min-height: auto;
+    position: relative;
+    flex-direction: row;
+    align-items: center;
+    padding: 12px 14px;
+    gap: 14px;
+    overflow-x: auto;
+  }
+  .sidebar-top {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+  .sidebar-nav {
+    flex-direction: row;
+    flex: none;
+  }
+  .sidebar-link {
+    white-space: nowrap;
+    padding: 8px 12px;
+  }
+  .sidebar-link-desc {
+    display: none;
+  }
+  .sidebar-back {
+    display: none;
+  }
+}

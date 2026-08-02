@@ -1,7 +1,8 @@
 ﻿import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import Sidebar from './Sidebar'
 
 const CATEGORIES = ['Starters', 'Main Course', 'Desserts', 'Beverages', 'Snacks']
 
@@ -53,26 +54,21 @@ export default function AdminPanel() {
   }
 
   return (
-    <div className="admin-page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1>{restaurant.name}</h1>
-          <div className="admin-sub">
-            Menu &amp; table management &middot; Plan: {restaurant.subscription_tier} &middot; Status: {restaurant.subscription_status}
+    <div className="app-shell">
+      <Sidebar restaurantName={restaurant.name} />
+      <div className="app-main">
+        <div className="admin-page">
+          <div style={{ marginBottom: 4 }}>
+            <h1>{restaurant.name}</h1>
+            <div className="admin-sub">
+              Menu &amp; table management &middot; Plan: {restaurant.subscription_tier} &middot; Status: {restaurant.subscription_status}
+            </div>
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Link to={`/billing/${adminToken}`}>
-            <button className="admin-btn ghost">Billing</button>
-          </Link>
-          <Link to={`/kitchen/${adminToken}`}>
-            <button className="admin-btn">Go to Kitchen</button>
-          </Link>
+          <RestaurantSettings restaurant={restaurant} onUpdated={setRestaurant} />
+          <MenuManager restaurantId={restaurant.id} />
+          <TableManager slug={restaurant.slug} />
         </div>
       </div>
-      <RestaurantSettings restaurant={restaurant} onUpdated={setRestaurant} />
-      <MenuManager restaurantId={restaurant.id} />
-      <TableManager slug={restaurant.slug} />
     </div>
   )
 }

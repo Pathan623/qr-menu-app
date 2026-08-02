@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import Sidebar from './Sidebar'
 
 const BILLING_PLANS = [
   {
@@ -65,18 +66,14 @@ export default function Billing() {
   }
 
   return (
-    <div className="admin-page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <div>
+    <div className="app-shell">
+      <Sidebar restaurantName={restaurant.name} />
+      <div className="app-main">
+        <div className="admin-page">
           <h1>Billing &amp; Subscription</h1>
-          <div className="admin-sub">{restaurant.name}</div>
+          <BillingSection restaurant={restaurant} adminToken={adminToken} onUpdated={setRestaurant} />
         </div>
-        <Link to={`/dashboard/${adminToken}`}>
-          <button className="admin-btn ghost">Back to Dashboard</button>
-        </Link>
       </div>
-
-      <BillingSection restaurant={restaurant} adminToken={adminToken} onUpdated={setRestaurant} />
     </div>
   )
 }

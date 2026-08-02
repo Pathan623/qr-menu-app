@@ -1,18 +1,21 @@
 ﻿import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
+import Sidebar from './Sidebar'
 
 export default function KitchenDashboard() {
   const { adminToken } = useParams()
-  const [restaurantId, setRestaurantId] = useState(null)
+  const [restaurant, setRestaurant] = useState(null)
   const [orders, setOrders] = useState([])
   const [soundEnabled, setSoundEnabled] = useState(false)
   const audioCtxRef = useRef(null)
 
   useEffect(() => {
-    supabase.from('restaurants').select('id').eq('admin_token', adminToken).single()
-      .then(({ data }) => { if (data) setRestaurantId(data.id) })
+    supabase.from('restaurants').select('id, name').eq('admin_token', adminToken).single()
+      .then(({ data }) => { if (data) setRestaurant(data) })
   }, [adminToken])
+
+  const restaurantId = restaurant?.id
 
   useEffect(() => {
     if (!restaurantId) return
@@ -125,69 +128,74 @@ export default function KitchenDashboard() {
   }
 
   return (
-    <div className="kitchen-page">
-      <div className="kitchen-topbar">
-        <h1><span className="live-dot" />Kitchen Orders</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {!soundEnabled && (
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.6, color: 'var(--ticket)' }}>
-              Tap anywhere to enable sound
-            </div>
-          )}
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, opacity: 0.7, color: 'var(--ticket)' }}>
-            {orders.length} active
-          </div>
-        </div>
-      </div>
-
-      {orders.length === 0 && (
-        <div className="empty-state">No active orders - waiting for tables to order...</div>
-      )}
-
-      <div className="ticket-grid">
-        {orders.map((order) => (
-          <div className="ticket" key={order.id}>
-            <div className="ticket-perf" />
-            <div className="ticket-head">
-              <div className="ticket-table">TABLE {order.table_number}</div>
-              <div className="ticket-time">{timeAgo(order.created_at)}</div>
-            </div>
-            <div className="ticket-body">
-              <span className={`status-pill ${order.status}`}>{order.status.toUpperCase()}</span>
-              <div style={{ marginTop: 10 }}>
-                {order.items.map((it, idx) => (
-                  <div className="ticket-line" key={idx}>
-                    <span>{it.qty}x {it.name}</span>
-                    <button
-                      className="ticket-line-remove"
-                      title="Remove this item (out of stock)"
-                      onClick={() => removeItem(order, idx)}
-                    >
-                      x
-                    </button>
-                  </div>
-                ))}
+    <div className="app-shell">
+      <Sidebar restaurantName={restaurant?.name} />
+      <div className="app-main">
+        <div className="kitchen-page">
+          <div className="kitchen-topbar">
+            <h1><span className="live-dot" />Kitchen Orders</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {!soundEnabled && (
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, opacity: 0.6, color: 'var(--ticket)' }}>
+                  Tap anywhere to enable sound
+                </div>
+              )}
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, opacity: 0.7, color: 'var(--ticket)' }}>
+                {orders.length} active
               </div>
             </div>
-            <div className="ticket-actions">
-              {order.status === 'pending' && (
-                <button className="prep" onClick={() => updateStatus(order.id, 'preparing')}>
-                  START PREPARING
-                </button>
-              )}
-              {order.status === 'preparing' && (
-                <button className="done" onClick={() => updateStatus(order.id, 'served')}>
-                  MARK SERVED
-                </button>
-              )}
-              {order.status === 'pending' && (
-                <button className="done" onClick={() => updateStatus(order.id, 'served')}>
-                  MARK SERVED
-                </button>
-              )}
-            </div>
           </div>
-        ))}
+
+          {orders.length === 0 && (
+            <div className="empty-state">No active orders - waiting for tables to order...</div>
+          )}
+
+          <div className="ticket-grid">
+            {orders.map((order) => (
+              <div className="ticket" key={order.id}>
+                <div className="ticket-perf" />
+                <div className="ticket-head">
+                  <div className="ticket-table">TABLE {order.table_number}</div>
+                  <div className="ticket-time">{timeAgo(order.created_at)}</div>
+                </div>
+                <div className="ticket-body">
+                  <span className={`status-pill ${order.status}`}>{order.status.toUpperCase()}</span>
+                  <div style={{ marginTop: 10 }}>
+                    {order.items.map((it, idx) => (
+                      <div className="ticket-line" key={idx}>
+                        <span>{it.qty}x {it.name}</span>
+                        <button
+                          className="ticket-line-remove"
+                          title="Remove this item (out of stock)"
+                          onClick={() => removeItem(order, idx)}
+                        >
+                          x
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="ticket-actions">
+                  {order.status === 'pending' && (
+                    <button className="prep" onClick={() => updateStatus(order.id, 'preparing')}>
+                      START PREPARING
+                    </button>
+                  )}
+                  {order.status === 'preparing' && (
+                    <button className="done" onClick={() => updateStatus(order.id, 'served')}>
+                      MARK SERVED
+                    </button>
+                  )}
+                  {order.status === 'pending' && (
+                    <button className="done" onClick={() => updateStatus(order.id, 'served')}>
+                      MARK SERVED
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )
