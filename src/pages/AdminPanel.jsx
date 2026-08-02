@@ -65,6 +65,7 @@ export default function AdminPanel() {
           <button className="admin-btn">Go to Kitchen</button>
         </Link>
       </div>
+      <BillingSection restaurant={restaurant} onUpdated={setRestaurant} />
       <RestaurantSettings restaurant={restaurant} onUpdated={setRestaurant} />
       <MenuManager restaurantId={restaurant.id} />
       <TableManager slug={restaurant.slug} />
@@ -78,6 +79,83 @@ function slugify(value) {
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+function BillingSection({ restaurant, onUpdated }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubscribe() {
+    setLoading(true)
+    setError('')
+
+    try {
+      // 1. Ask our create-subscription Edge Function for a Razorpay order
+      const { data, error: fnError } = await supabase.functions.invoke('create-subscription', {
+        body: { restaurant_id: restaurant.id },
+      })
+
+      if (fnError) throw fnError
+      if (!data) throw new Error('No response from server')
+
+      // Assumption: function returns { order_id, amount, currency, key_id }
+      const { order_id, amount, currency, key_id } = data
+
+      // 2. Load Razorpay Checkout script if not already loaded
+      if (!window.Razorpay) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+          script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+          script.onload = resolve
+          script.onerror = reject
+          document.body.appendChild(script)
+        })
+      }
+
+      // 3. Open Razorpay Checkout
+      const options = {
+        key: key_id,
+        amount,
+        currency: currency || 'INR',
+        name: 'TapNServe Subscription',
+        description: `${restaurant.subscription_tier} plan`,
+        order_id,
+        handler: function () {
+          alert('Payment successful! Your subscription will update shortly.')
+          window.location.reload()
+        },
+        prefill: { name: restaurant.name },
+        theme: { color: '#3F6652' },
+      }
+
+      const rzp = new window.Razorpay(options)
+      rzp.open()
+    } catch (err) {
+      console.error(err)
+      setError(err.message || 'Something went wrong, please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const isTrialing = restaurant.subscription_status === 'trialing'
+  const isActive = restaurant.subscription_status === 'active'
+
+  return (
+    <div className="admin-section">
+      <h2>Billing</h2>
+      <p style={{ fontSize: 14, opacity: 0.8, marginBottom: 12 }}>
+        Plan: <strong>{restaurant.subscription_tier}</strong> &middot; Status: <strong>{restaurant.subscription_status}</strong>
+        {restaurant.trial_ends_at && isTrialing && (
+          <> &middot; Trial ends {new Date(restaurant.trial_ends_at).toLocaleDateString()}</>
+        )}
+      </p>
+      {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+      <button className="admin-btn" disabled={loading} onClick={handleSubscribe}>
+        {loading ? 'Processing...' : isActive ? 'Manage / Renew Subscription' : 'Subscribe Now'}
+      </button>
+    </div>
+  )
 }
 
 function RestaurantSettings({ restaurant, onUpdated }) {
