@@ -65,7 +65,7 @@ export default function AdminPanel() {
           <button className="admin-btn">Go to Kitchen</button>
         </Link>
       </div>
-      <BillingSection restaurant={restaurant} onUpdated={setRestaurant} />
+      <BillingSection restaurant={restaurant} adminToken={adminToken} onUpdated={setRestaurant} />
       <RestaurantSettings restaurant={restaurant} onUpdated={setRestaurant} />
       <MenuManager restaurantId={restaurant.id} />
       <TableManager slug={restaurant.slug} />
@@ -81,25 +81,28 @@ function slugify(value) {
     .replace(/^-+|-+$/g, '')
 }
 
-function BillingSection({ restaurant, onUpdated }) {
+function BillingSection({ restaurant, adminToken, onUpdated }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [planId, setPlanId] = useState(
+    restaurant.subscription_tier === 'unlimited' ? 'unlimited' : 'starter'
+  )
 
   async function handleSubscribe() {
     setLoading(true)
     setError('')
 
     try {
-      // 1. Ask our create-subscription Edge Function for a Razorpay order
+      // 1. Ask create-subscription Edge Function to create a Razorpay subscription
       const { data, error: fnError } = await supabase.functions.invoke('create-subscription', {
-        body: { restaurant_id: restaurant.id },
+        body: { adminToken, planId },
       })
 
       if (fnError) throw fnError
       if (!data) throw new Error('No response from server')
+      if (data.error) throw new Error(data.error)
 
-      // Assumption: function returns { order_id, amount, currency, key_id }
-      const { order_id, amount, currency, key_id } = data
+      const { subscriptionId, keyId, restaurantName } = data
 
       // 2. Load Razorpay Checkout script if not already loaded
       if (!window.Razorpay) {
@@ -112,19 +115,17 @@ function BillingSection({ restaurant, onUpdated }) {
         })
       }
 
-      // 3. Open Razorpay Checkout
+      // 3. Open Razorpay Checkout for the subscription
       const options = {
-        key: key_id,
-        amount,
-        currency: currency || 'INR',
+        key: keyId,
+        subscription_id: subscriptionId,
         name: 'TapNServe Subscription',
-        description: `${restaurant.subscription_tier} plan`,
-        order_id,
+        description: `${planId === 'unlimited' ? 'Unlimited' : 'Starter'} plan`,
         handler: function () {
           alert('Payment successful! Your subscription will update shortly.')
           window.location.reload()
         },
-        prefill: { name: restaurant.name },
+        prefill: { name: restaurantName },
         theme: { color: '#3F6652' },
       }
 
@@ -138,8 +139,8 @@ function BillingSection({ restaurant, onUpdated }) {
     }
   }
 
-  const isTrialing = restaurant.subscription_status === 'trialing'
   const isActive = restaurant.subscription_status === 'active'
+  const isTrialing = restaurant.subscription_status === 'trialing'
 
   return (
     <div className="admin-section">
@@ -150,9 +151,18 @@ function BillingSection({ restaurant, onUpdated }) {
           <> &middot; Trial ends {new Date(restaurant.trial_ends_at).toLocaleDateString()}</>
         )}
       </p>
+
+      <div className="admin-row" style={{ marginBottom: 12 }}>
+        <select value={planId} onChange={(e) => setPlanId(e.target.value)}>
+          <option value="starter">Starter - Rs.800/mo</option>
+          <option value="unlimited">Unlimited - Rs.2,500/mo</option>
+        </select>
+      </div>
+
       {error && <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 10 }}>{error}</p>}
+
       <button className="admin-btn" disabled={loading} onClick={handleSubscribe}>
-        {loading ? 'Processing...' : isActive ? 'Manage / Renew Subscription' : 'Subscribe Now'}
+        {loading ? 'Processing...' : isActive ? 'Change / Renew Subscription' : 'Subscribe Now'}
       </button>
     </div>
   )
